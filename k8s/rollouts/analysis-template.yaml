@@ -1,0 +1,35 @@
+---
+# AnalysisTemplate for automated testing during blue/green deployment
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: http-success-rate
+  namespace: game-2048-rollouts
+spec:
+  metrics:
+  - name: http-success-rate
+    initialDelay: 10s
+    interval: 30s
+    successCondition: result >= 0.95
+    failureLimit: 3
+    provider:
+      job:
+        spec:
+          template:
+            spec:
+              containers:
+              - name: curl
+                image: curlimages/curl:latest
+                command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  for i in $(seq 1 10); do
+                    curl -f http://game-2048-rollout-preview.game-2048-rollouts.svc.cluster.local/
+                    sleep 1
+                  done
+                  echo "1.0"
+              restartPolicy: Never
+          backoffLimit: 0
+
