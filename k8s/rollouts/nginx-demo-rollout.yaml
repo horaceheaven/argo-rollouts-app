@@ -1,0 +1,287 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nginx-demo
+---
+# Blue Version ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-blue
+  namespace: nginx-demo
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Blue Version</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                font-family: 'Arial', sans-serif;
+            }
+            .container {
+                text-align: center;
+                color: white;
+                padding: 50px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            }
+            h1 {
+                font-size: 72px;
+                margin: 20px 0;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            .version {
+                font-size: 36px;
+                margin: 20px 0;
+                padding: 20px 40px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+            }
+            .info {
+                font-size: 18px;
+                margin-top: 30px;
+                opacity: 0.9;
+            }
+            .badge {
+                display: inline-block;
+                padding: 10px 20px;
+                background: #4299e1;
+                border-radius: 20px;
+                margin: 10px;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🔵 BLUE VERSION</h1>
+            <div class="version">Version 1.0</div>
+            <div class="info">
+                <div class="badge">Production Ready</div>
+                <div class="badge">Stable</div>
+                <div class="badge">Active</div>
+            </div>
+            <p style="margin-top: 40px; font-size: 20px;">
+                This is the <strong>BLUE</strong> environment<br>
+                Currently serving production traffic
+            </p>
+        </div>
+    </body>
+    </html>
+---
+# Green Version ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-green
+  namespace: nginx-demo
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Green Version</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+                font-family: 'Arial', sans-serif;
+            }
+            .container {
+                text-align: center;
+                color: white;
+                padding: 50px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            }
+            h1 {
+                font-size: 72px;
+                margin: 20px 0;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            .version {
+                font-size: 36px;
+                margin: 20px 0;
+                padding: 20px 40px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+            }
+            .info {
+                font-size: 18px;
+                margin-top: 30px;
+                opacity: 0.9;
+            }
+            .badge {
+                display: inline-block;
+                padding: 10px 20px;
+                background: #48bb78;
+                border-radius: 20px;
+                margin: 10px;
+                font-weight: bold;
+            }
+            .new {
+                animation: pulse 2s infinite;
+            }
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="new">🟢 GREEN VERSION</h1>
+            <div class="version">Version 2.0</div>
+            <div class="info">
+                <div class="badge">New Features</div>
+                <div class="badge">Enhanced</div>
+                <div class="badge">Preview</div>
+            </div>
+            <p style="margin-top: 40px; font-size: 20px;">
+                This is the <strong>GREEN</strong> environment<br>
+                New version ready for promotion! 🚀
+            </p>
+        </div>
+    </body>
+    </html>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-demo
+  namespace: nginx-demo
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: nginx-demo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-demo-preview
+  namespace: nginx-demo
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: nginx-demo
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: nginx-demo
+  namespace: nginx-demo
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: nginx-demo
+  template:
+    metadata:
+      labels:
+        app: nginx-demo
+        version: blue  # This will change to 'green' when we update
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+        resources:
+          limits:
+            cpu: 50m
+            memory: 64Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+      volumes:
+      - name: html
+        configMap:
+          name: nginx-blue  # Start with Blue version
+  strategy:
+    blueGreen:
+      activeService: nginx-demo
+      previewService: nginx-demo-preview
+      autoPromotionEnabled: false
+      autoPromotionSeconds: 30
+      scaleDownDelaySeconds: 30
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-demo
+  namespace: nginx-demo
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/success-codes: "200"
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-demo
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-demo-preview
+  namespace: nginx-demo
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/success-codes: "200"
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-demo-preview
+                port:
+                  name: http
+
