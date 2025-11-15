@@ -37,12 +37,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-ECR-Build
           aws-region: ${{ env.AWS_REGION }}
-          # Or use OIDC (preferred):
-          # role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          # role-session-name: GitHubActions-ECR
       
       - name: Login to Amazon ECR
         id: login-ecr
@@ -99,6 +96,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
+      id-token: write  # For OIDC
       contents: write
     
     steps:
@@ -112,16 +110,19 @@ jobs:
       - name: Set up yq
         uses: mikefarah/yq@master
       
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-ECR-GitOps
+          aws-region: ${{ env.AWS_REGION }}
+      
       - name: Get ECR registry URL
         id: ecr-info
         run: |
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           echo "registry=${ECR_REGISTRY}" >> $GITHUB_OUTPUT
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ env.AWS_REGION }}
       
       - name: Update image in rollout manifest
         run: |
