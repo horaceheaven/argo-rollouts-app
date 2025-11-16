@@ -45,3 +45,4 @@ RUN mkdir -p /var/cache/nginx/client_temp \
 CMD ["nginx", "-g", "daemon off;"]
 
 
+
