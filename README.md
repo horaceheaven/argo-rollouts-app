@@ -63,7 +63,7 @@ terraform apply -auto-approve
 Connect your local kubectl to the EKS cluster:
 
 ```bash
-aws eks --region us-west-2 update-kubeconfig --name getting-started-gitops
+aws eks --region us-west-2 update-kubeconfig --name app-cluster-us-west-2
 ```
 
 Verify access:
@@ -158,13 +158,18 @@ kubectl get ingress -n nginx-demo
 10. **Traffic Routing**: AWS Application Load Balancer routes production traffic to the Active service
 
 ## TODO
-- [ ] Change EKS cluster name (currently hardcoded to `getting-started-gitops`)
+- [x] Change EKS cluster name (changed to `app-cluster-us-west-2`)
 - [x] Rollback on fail (configured with `progressDeadlineSeconds: 300`)
+
+## Requirements
+- [] Rollback on failure
+- [] Auto sync on git push
 
 ## Assumptions
 
 
 ## Future Improvements
+- [ ] Add terraform to github actions pipeline for bootstrap and setup
 
 
 ## Test Scenarios

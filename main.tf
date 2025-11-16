@@ -39,7 +39,7 @@ provider "kubernetes" {
 }
 
 locals {
-  name   = "getting-started-gitops"
+  name   = "app-cluster-us-west-2"
   region = var.region
 
   cluster_version = var.kubernetes_version
