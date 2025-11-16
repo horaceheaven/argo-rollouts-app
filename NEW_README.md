@@ -4,12 +4,12 @@ This repository implements a complete **GitOps-based CI/CD pipeline** for contai
 
 ### Key Features
 
-- **🔄 GitOps Workflow**: Infrastructure and application deployments are managed through Git, ensuring declarative configuration and audit trails
-- **🚀 CI/CD Pipeline**: GitHub Actions automatically builds Docker images, pushes to ECR, and updates Kubernetes manifests on every code change
-- **🎯 Blue/Green Deployments**: Argo Rollouts enables safe, zero-downtime deployments with manual promotion gates
-- **🛡️ Automated Rollback**: Configured to automatically rollback failed deployments within 5 minutes
-- **☁️ AWS Native**: Leverages EKS, ECR, VPC, and AWS Load Balancer Controller for production-ready infrastructure
-- **🔐 Secure by Default**: GitHub Actions uses OIDC for AWS authentication (no access keys stored)
+- **GitOps Workflow**: Infrastructure and application deployments are managed through Git, ensuring declarative configuration and audit trails
+- **CI/CD Pipeline**: GitHub Actions automatically builds Docker images, pushes to ECR, and updates Kubernetes manifests on every code change
+- **Blue/Green Deployments**: Argo Rollouts enables safe, zero-downtime deployments with manual promotion gates
+- **Automated Rollback**: Configured to automatically rollback failed deployments within 5 minutes
+- **AWS Native**: Leverages EKS, ECR, VPC, and AWS Load Balancer Controller for production-ready infrastructure
+- **Secure by Default**: GitHub Actions uses OIDC for AWS authentication (no access keys stored)
 
 ### Architecture Components
 
