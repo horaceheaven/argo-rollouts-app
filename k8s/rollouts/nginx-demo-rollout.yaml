@@ -7,7 +7,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
 ---
 # Blue Version ConfigMap
 apiVersion: v1
@@ -21,7 +21,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
 ---
 # Green Version ConfigMap
 apiVersion: v1
@@ -35,7 +35,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
 ---
 apiVersion: v1
 kind: Service
@@ -53,7 +53,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
 ---
 apiVersion: v1
 kind: Service
@@ -71,7 +71,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
@@ -92,7 +92,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+          image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
           ports:
             - name: http
               containerPort: 80
@@ -145,7 +145,7 @@ spec:
   template:
     spec:
       containers:
-        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -173,4 +173,4 @@ spec:
   template:
     spec:
       containers:
-        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:11c9e34e721ca7e9010d59bdd9d2b3d58109c35a
+        - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:17c6cb7a0705574a1fbf79a27c0278a213f54081
