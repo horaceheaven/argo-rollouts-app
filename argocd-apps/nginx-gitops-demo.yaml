@@ -1,0 +1,52 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-gitops-demo
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  # SOURCE: Your GitHub Repository
+  source:
+    repoURL: https://github.com/horaceheaven/argo-rollouts-app.git
+    targetRevision: main  # or master, depending on your default branch
+    path: k8s/rollouts    # Path to your manifests
+    
+    # Optional: If you want to use a specific file
+    # directory:
+    #   recurse: true
+  
+  # DESTINATION: Where to deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nginx-demo
+  
+  # AUTO-SYNC CONFIGURATION (This is the GitOps magic!)
+  syncPolicy:
+    automated:
+      prune: true        # Delete resources not in Git
+      selfHeal: true     # Auto-correct manual changes
+      allowEmpty: false
+    
+    syncOptions:
+      - CreateNamespace=true  # Auto-create namespace
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Ignore differences for certain fields
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # Example: ignore replica differences
+

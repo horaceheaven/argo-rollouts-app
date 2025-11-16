@@ -31,3 +31,40 @@ output "access_argocd" {
     echo "ArgoCD URL: https://$(kubectl get svc -n argocd argo-cd-argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
     EOT
 }
+
+output "ecr_repository_url" {
+  description = "ECR Repository URL for nginx-demo-app"
+  value       = aws_ecr_repository.nginx_demo.repository_url
+}
+
+output "ecr_repository_arn" {
+  description = "ECR Repository ARN"
+  value       = aws_ecr_repository.nginx_demo.arn
+}
+
+output "github_actions_role_arn" {
+  description = "IAM Role ARN for GitHub Actions OIDC"
+  value       = aws_iam_role.github_actions.arn
+}
+
+output "configure_github_actions" {
+  description = "Setup GitHub Actions with OIDC"
+  value       = <<-EOT
+    # GitHub Actions is configured to use OIDC (no access keys needed!)
+    
+    # Add this as a GitHub Secret:
+    # GITOPS_TOKEN: <GitHub Personal Access Token with repo scope>
+    
+    # The workflow will use this role ARN (already configured in workflow):
+    # ${aws_iam_role.github_actions.arn}
+    
+    # ECR Repository URL:
+    echo "ECR Repository: ${aws_ecr_repository.nginx_demo.repository_url}"
+    
+    # Create GitHub Personal Access Token:
+    # 1. Go to: https://github.com/settings/tokens
+    # 2. Generate new token (classic)
+    # 3. Select scope: 'repo'
+    # 4. Copy token and add as GITOPS_TOKEN secret
+    EOT
+}
