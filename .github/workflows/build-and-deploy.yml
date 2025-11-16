@@ -130,33 +130,81 @@ jobs:
           cd gitops-repo
           IMAGE_TAG="${{ steps.ecr-info.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
           
-          # Update ONLY the Rollout resource's image field using document selector
-          # Use yq with document index selector to target ONLY the Rollout resource
-          # Find the Rollout document and update only that one
-          yq eval 'select(.kind == "Rollout") | .spec.template.spec.containers[0].image = "'"${IMAGE_TAG}"'"' \
-            -i ${{ env.GITOPS_PATH }} -N || {
-            # Fallback: try updating without selector (single document mode)
-            yq eval '.spec.template.spec.containers[0].image = "'"${IMAGE_TAG}"'"' \
-              -i ${{ env.GITOPS_PATH }}
-          }
+          # Count total documents before update
+          DOC_COUNT=$(grep -c "^---$" "${{ env.GITOPS_PATH }}" || echo "0")
+          DOC_COUNT=$((DOC_COUNT + 1))  # Add 1 for the first document
+          echo "📄 Found $DOC_COUNT documents in manifest"
           
-          # Validate the YAML is still valid after update
+          # Use a Python script to safely update only the Rollout image while preserving all documents
+          python3 << PYTHON_SCRIPT
+          import yaml
+          import sys
+          import os
+          
+          file_path = "${{ env.GITOPS_PATH }}"
+          image_tag = "${IMAGE_TAG}"
+          
+          # Read all documents
+          with open(file_path, 'r') as f:
+              documents = list(yaml.safe_load_all(f))
+          
+          original_count = len(documents)
+          print(f"📄 Loaded {original_count} documents")
+          
+          # Find and update the Rollout document
+          rollout_found = False
+          for doc in documents:
+              if doc and doc.get('kind') == 'Rollout':
+                  if 'spec' in doc and 'template' in doc['spec']:
+                      if 'spec' in doc['spec']['template'] and 'containers' in doc['spec']['template']['spec']:
+                          if len(doc['spec']['template']['spec']['containers']) > 0:
+                              doc['spec']['template']['spec']['containers'][0]['image'] = image_tag
+                              rollout_found = True
+                              print(f"✅ Updated Rollout image to: {image_tag}")
+                              break
+          
+          if not rollout_found:
+              print("❌ ERROR: Rollout resource not found or structure unexpected!")
+              sys.exit(1)
+          
+          # Verify document count unchanged
+          if len(documents) != original_count:
+              print(f"❌ ERROR: Document count changed from {original_count} to {len(documents)}!")
+              sys.exit(1)
+          
+          # Write all documents back
+          with open(file_path, 'w') as f:
+              for i, doc in enumerate(documents):
+                  if i > 0:
+                      f.write('---\n')
+                  yaml.dump(doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+          
+          print(f"✅ Successfully updated manifest, preserved {len(documents)} documents")
+          PYTHON_SCRIPT
+          
+          # Verify YAML is still valid
           if ! yq eval '.' "${{ env.GITOPS_PATH }}" > /dev/null 2>&1; then
             echo "❌ ERROR: YAML validation failed after update!"
-            echo "YAML content:"
-            cat "${{ env.GITOPS_PATH }}"
             exit 1
           fi
           
-          # Double-check: ensure no invalid spec.template blocks exist
-          if yq eval 'select(.kind != "Rollout") | has("spec.template")' "${{ env.GITOPS_PATH }}" 2>/dev/null | grep -q "true"; then
-            echo "❌ ERROR: Found invalid spec.template blocks in non-Rollout resources!"
-            echo "This should not happen. Cleaning up..."
+          # Verify Rollout was updated correctly
+          ROLLOUT_IMAGE=$(yq eval 'select(.kind == "Rollout") | .spec.template.spec.containers[0].image' "${{ env.GITOPS_PATH }}" -N)
+          if [ "$ROLLOUT_IMAGE" != "$IMAGE_TAG" ]; then
+            echo "❌ ERROR: Rollout image verification failed!"
+            echo "Expected: $IMAGE_TAG"
+            echo "Got: $ROLLOUT_IMAGE"
             exit 1
           fi
           
-          echo "✅ Updated image to: ${IMAGE_TAG}"
-          echo "✅ YAML validation passed"
+          # Verify all required resource types still exist
+          for resource in Namespace ConfigMap Service Rollout Ingress; do
+            if ! yq eval "select(.kind == \"$resource\")" "${{ env.GITOPS_PATH }}" -N | grep -q "kind: $resource"; then
+              echo "⚠️  WARNING: $resource resource missing"
+            fi
+          done
+          
+          echo "✅ Image update completed successfully"
       
       - name: Commit and push changes
         run: |
