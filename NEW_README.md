@@ -19,12 +19,16 @@
 
 ## TODO
 - change eks cluster name
+- rollback on fail
 
 ## Architecture
 
+![GitOpsPipeline](static/GitOpsPIpeline.png "GitOps Pipeline")
 
 ## Assumptions
 
 
 ## Future Improvements
 
+
+## Test Scenarios
