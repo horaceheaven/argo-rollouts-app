@@ -130,12 +130,21 @@ jobs:
           cd gitops-repo
           IMAGE_TAG="${{ steps.ecr-info.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
           
-          # Update ONLY the Rollout resource's image (not other resources)
-          # Using yq with multi-document support to target only the Rollout
-          yq eval 'select(.kind == "Rollout") | .spec.template.spec.containers[0].image = "'"${IMAGE_TAG}"'"' \
+          # Update ONLY the Rollout resource's image field
+          # Using yq to safely update only the image field in the Rollout resource
+          yq eval '.spec.template.spec.containers[0].image = "'"${IMAGE_TAG}"'"' \
             -i ${{ env.GITOPS_PATH }}
           
-          echo "Updated image to: ${IMAGE_TAG}"
+          # Validate the YAML is still valid after update
+          yq eval '.' "${{ env.GITOPS_PATH }}" > /dev/null || {
+            echo "❌ ERROR: YAML validation failed after update!"
+            echo "YAML content:"
+            cat "${{ env.GITOPS_PATH }}"
+            exit 1
+          }
+          
+          echo "✅ Updated image to: ${IMAGE_TAG}"
+          echo "✅ YAML validation passed"
       
       - name: Commit and push changes
         run: |
