@@ -38,8 +38,9 @@ RUN mkdir -p /var/cache/nginx/client_temp \
     && touch /var/run/nginx.pid \
     && chown -R nginx:nginx /var/run/nginx.pid
 
-# Run as non-root user for security
-USER nginx
+# Note: Running as root to allow binding to port 80
+# In production, consider using capabilities or run as non-root with port > 1024
+# USER nginx
 
 CMD ["nginx", "-g", "daemon off;"]
 
