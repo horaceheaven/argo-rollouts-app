@@ -165,11 +165,9 @@ spec:
       prePromotionAnalysis:
         templates:
         - templateName: nginx-simple-health-check
-        startingDeadlineSeconds: 300
       postPromotionAnalysis:
         templates:
         - templateName: nginx-post-promotion-check
-        startingDeadlineSeconds: 300
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
