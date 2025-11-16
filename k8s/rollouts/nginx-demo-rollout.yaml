@@ -9,7 +9,7 @@ metadata:
   name: nginx-blue
   namespace: nginx-demo
 data:
-  index.html: "<!DOCTYPE html>\n<html>\n<head>\n    <title>Blue Version v1</title>\n\
+  index.html: "<!DOCTYPE html>\n<html>\n<head>\n    <title>Production - Nginx Demo</title>\n\
     \    <style>\n        body {\n            margin: 0;\n            padding: 0;\n\
     \            display: flex;\n            justify-content: center;\n          \
     \  align-items: center;\n            min-height: 100vh;\n            background:\
@@ -28,7 +28,7 @@ data:
     \            padding: 10px 20px;\n            background: #4299e1;\n         \
     \   border-radius: 20px;\n            margin: 10px;\n            font-weight:\
     \ bold;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\"\
-    >\n        <h1>\U0001F535 BLUE VERSION v5</h1>\n        <div class=\"version\"\
+    >\n        <div class=\"status-banner\">\U0001F535 PRODUCTION ENVIRONMENT</div>\n        <h1>BLUE VERSION</h1>\n        <div class=\"version\"\
     >Version 1.0</div>\n        <div class=\"info\">\n            <div class=\"badge\"\
     >Production Ready</div>\n            <div class=\"badge\">Stable</div>\n     \
     \       <div class=\"badge\">Active</div>\n        </div>\n        <p style=\"\
@@ -42,7 +42,7 @@ metadata:
   name: nginx-green
   namespace: nginx-demo
 data:
-  index.html: "<!DOCTYPE html>\n<html>\n<head>\n    <title>Green Version</title>\n\
+  index.html: "<!DOCTYPE html>\n<html>\n<head>\n    <title>Preview - Nginx Demo</title>\n\
     \    <style>\n        body {\n            margin: 0;\n            padding: 0;\n\
     \            display: flex;\n            justify-content: center;\n          \
     \  align-items: center;\n            min-height: 100vh;\n            background:\
@@ -60,17 +60,24 @@ data:
     \ opacity: 0.9;\n        }\n        .badge {\n            display: inline-block;\n\
     \            padding: 10px 20px;\n            background: #48bb78;\n         \
     \   border-radius: 20px;\n            margin: 10px;\n            font-weight:\
-    \ bold;\n        }\n        .new {\n            animation: pulse 2s infinite;\n\
+    \ bold;\n        }\n        .status-banner {\n            font-size: 24px;\n    \
+    \        font-weight: bold;\n            padding: 15px 30px;\n            background:\
+    \ rgba(255, 255, 255, 0.3);\n            border-radius: 15px;\n            margin-bottom:\
+    \ 20px;\n            border: 3px solid #fff;\n            animation: pulse 2s infinite;\n\
     \        }\n        @keyframes pulse {\n            0%, 100% { transform: scale(1);\
     \ }\n            50% { transform: scale(1.05); }\n        }\n    </style>\n</head>\n\
-    <body>\n    <div class=\"container\">\n        <h1 class=\"new\">\U0001F7E2 GREEN\
-    \ VERSION</h1>\n        <div class=\"version\">Version 2.0</div>\n        <div\
-    \ class=\"info\">\n            <div class=\"badge\">New Features</div>\n     \
-    \       <div class=\"badge\">Enhanced</div>\n            <div class=\"badge\"\
-    >Preview</div>\n        </div>\n        <p style=\"margin-top: 40px; font-size:\
-    \ 20px;\">\n            This is the <strong>GREEN</strong> environment<br>\n \
-    \           New version ready for promotion! \U0001F680\n        </p>\n    </div>\n\
-    </body>\n</html>\n"
+    <body>\n    <div class=\"container\">\n        <div class=\"status-banner\">\U0001F7E2\
+    \ PREVIEW ENVIRONMENT</div>\n        <h1>GREEN VERSION</h1>\n        <div class=\"version\"\
+    \ >Version 2.0</div>\n        <div class=\"info\">\n            <div class=\"badge\"\
+    \ >New Features</div>\n            <div class=\"badge\">Enhanced</div>\n     \
+    \       <div class=\"badge\">Preview Mode</div>\n            <div class=\"badge\"\
+    >Awaiting Promotion</div>\n        </div>\n        <p style=\"margin-top: 40px; font-size:\
+    \ 20px;\">\n            This is the <strong>PREVIEW</strong> environment<br>\n \
+    \           Testing new version before promotion to production<br>\n            <span\
+    \ style=\"font-size: 16px; opacity: 0.8;\">Preview Service: nginx-demo-preview</span><br>\n\
+    \            <span style=\"font-size: 14px; opacity: 0.7; margin-top: 10px; display:\
+    \ block;\">Ready for manual promotion to production \U0001F680</span>\n        </p>\n\
+    \    </div>\n</body>\n</html>\n"
 ---
 apiVersion: v1
 kind: Service
