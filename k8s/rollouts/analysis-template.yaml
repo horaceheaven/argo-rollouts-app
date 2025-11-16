@@ -1,0 +1,107 @@
+---
+# AnalysisTemplate for automatic rollback on health check failures
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: nginx-health-check
+  namespace: nginx-demo
+spec:
+  metrics:
+    # HTTP health check metric
+    - name: http-success-rate
+      interval: 30s
+      count: 5  # Run 5 checks
+      successCondition: result[0] >= 0.95  # 95% success rate required
+      failureLimit: 2  # Fail after 2 consecutive failures
+      provider:
+        prometheus:
+          address: http://prometheus-server.monitoring.svc:80
+          query: |
+            sum(rate(http_requests_total{service="nginx-demo-preview",status=~"2xx"}[1m])) 
+            / 
+            sum(rate(http_requests_total{service="nginx-demo-preview"}[1m]))
+    
+    # Simple HTTP check (no Prometheus required)
+    - name: http-availability
+      interval: 10s
+      count: 10  # Check 10 times over ~100 seconds
+      successCondition: result[0] >= 0.8  # 80% availability required
+      failureLimit: 3  # Fail after 3 consecutive failures
+      provider:
+        web:
+          url: http://nginx-demo-preview.nginx-demo.svc.cluster.local/
+          timeoutSeconds: 5
+          jsonPath: '{$.status}'  # Optional: if response is JSON
+          insecure: false
+---
+# Simple HTTP-based AnalysisTemplate (recommended for your setup)
+# This uses a Job-based approach to check HTTP endpoints
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: nginx-simple-health-check
+  namespace: nginx-demo
+spec:
+  metrics:
+    # HTTP availability check using a simple script
+    - name: http-success-rate
+      interval: 30s
+      count: 10  # Run 10 checks over 5 minutes
+      successCondition: result[0] >= 0.8  # 80% success rate required
+      failureLimit: 3  # Rollback after 3 consecutive failures
+      provider:
+        job:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: http-check
+                    image: curlimages/curl:latest
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        # Check if the service is responding
+                        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://nginx-demo-preview.nginx-demo.svc.cluster.local/ || echo "000")
+                        if [ "$HTTP_CODE" = "200" ]; then
+                          echo "1"
+                        else
+                          echo "0"
+                        fi
+                restartPolicy: Never
+---
+# AnalysisTemplate for post-promotion monitoring
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: nginx-post-promotion-check
+  namespace: nginx-demo
+spec:
+  metrics:
+    # Monitor active service after promotion
+    - name: post-promotion-health
+      interval: 30s
+      count: 10  # Monitor for 5 minutes after promotion
+      successCondition: result[0] >= 0.9  # 90% success rate required
+      failureLimit: 3  # Rollback if 3 consecutive failures
+      provider:
+        job:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: http-check
+                    image: curlimages/curl:latest
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        # Check if the active service is responding
+                        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://nginx-demo.nginx-demo.svc.cluster.local/ || echo "000")
+                        if [ "$HTTP_CODE" = "200" ]; then
+                          echo "1"
+                        else
+                          echo "0"
+                        fi
+                restartPolicy: Never
+
