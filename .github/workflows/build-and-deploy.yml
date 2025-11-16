@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'nginx-app/**'
-      - 'k8s/rollouts/**'  # Trigger on ConfigMap/Manifest changes
+      - 'nginx-app/**'  # Only trigger on application code changes
       - '.github/workflows/build-and-deploy.yml'
   workflow_dispatch:  # Allow manual trigger
 
