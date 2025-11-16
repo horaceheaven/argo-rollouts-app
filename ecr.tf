@@ -31,12 +31,12 @@ resource "aws_ecr_lifecycle_policy" "nginx_demo" {
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last 10 images"
+        description  = "Remove untagged images after 1 day"
         selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["main-", "sha-"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 10
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
         }
         action = {
           type = "expire"
@@ -44,25 +44,12 @@ resource "aws_ecr_lifecycle_policy" "nginx_demo" {
       },
       {
         rulePriority = 2
-        description  = "Keep 'latest' tag"
+        description  = "Keep images pushed in last 30 days"
         selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["latest"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 1
-        }
-        action = {
-          type = "expire"
-        }
-      },
-      {
-        rulePriority = 3
-        description  = "Remove untagged images after 1 day"
-        selection = {
-          tagStatus   = "untagged"
+          tagStatus   = "any"
           countType   = "sinceImagePushed"
           countUnit   = "days"
-          countNumber = 1
+          countNumber = 30
         }
         action = {
           type = "expire"
