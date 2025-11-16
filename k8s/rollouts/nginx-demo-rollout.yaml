@@ -174,3 +174,4 @@ spec:
     spec:
       containers:
         - image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:3c087e76e1d1ecfca2823daaf525140ed3214c3e
+
