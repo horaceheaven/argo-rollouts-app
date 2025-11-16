@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'nginx-app/**'
+      - 'k8s/rollouts/**'  # Trigger on ConfigMap/Manifest changes
       - '.github/workflows/build-and-deploy.yml'
   workflow_dispatch:  # Allow manual trigger
 
@@ -151,7 +152,11 @@ jobs:
           original_count = len(documents)
           print(f"📄 Loaded {original_count} documents")
           
-          # Find and update the Rollout document
+          # Extract git hash from image tag (everything after the last colon)
+          git_hash = image_tag.split(':')[-1]
+          print(f"🔖 Git hash: {git_hash}")
+          
+          # Find and update the Rollout document and ConfigMaps
           rollout_found = False
           for doc in documents:
               if doc and doc.get('kind') == 'Rollout':
@@ -161,7 +166,37 @@ jobs:
                               doc['spec']['template']['spec']['containers'][0]['image'] = image_tag
                               rollout_found = True
                               print(f"✅ Updated Rollout image to: {image_tag}")
-                              break
+              
+              # Update git hash in ConfigMap HTML (both blue and green)
+              elif doc and doc.get('kind') == 'ConfigMap':
+                  configmap_name = doc.get('metadata', {}).get('name', '')
+                  if 'nginx-blue' in configmap_name or 'nginx-green' in configmap_name:
+                      if 'data' in doc and 'index.html' in doc['data']:
+                          html_content = doc['data']['index.html']
+                          # Replace git hash in HTML (look for existing hash or placeholder)
+                          import re
+                          # Pattern to find existing git hash display
+                          hash_pattern = r'(<div style="font-size: 18px; font-weight: bold; color: #fff;">)([a-f0-9]{40}|{{GIT_HASH}})(</div>)'
+                          replacement = f'\\1{git_hash}\\3'
+                          if re.search(hash_pattern, html_content):
+                              doc['data']['index.html'] = re.sub(hash_pattern, replacement, html_content)
+                              print(f"✅ Updated git hash in {configmap_name} ConfigMap")
+                          else:
+                              # If no existing hash display, add it before closing container div
+                              # For production (blue), add after the service info
+                              if 'nginx-blue' in configmap_name:
+                                  insert_point = '</div>\\n    </body>'
+                                  git_hash_html = f'        <div style="margin-top: 30px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px; font-family: monospace;">\\n            <div style="font-size: 14px; opacity: 0.9; margin-bottom: 5px;">Git Commit:</div>\\n            <div style="font-size: 18px; font-weight: bold; color: #fff;">{git_hash}</div>\\n        </div>\\n'
+                                  if insert_point in html_content:
+                                      doc['data']['index.html'] = html_content.replace(insert_point, git_hash_html + insert_point)
+                                      print(f"✅ Added git hash display to {configmap_name} ConfigMap")
+                              # For preview (green), add after promotion message
+                              elif 'nginx-green' in configmap_name:
+                                  insert_point = '</div>\\n    </body>'
+                                  git_hash_html = f'        <div style="margin-top: 30px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px; font-family: monospace;">\\n            <div style="font-size: 14px; opacity: 0.9; margin-bottom: 5px;">Git Commit:</div>\\n            <div style="font-size: 18px; font-weight: bold; color: #fff;">{git_hash}</div>\\n        </div>\\n'
+                                  if insert_point in html_content:
+                                      doc['data']['index.html'] = html_content.replace(insert_point, git_hash_html + insert_point)
+                                      print(f"✅ Added git hash display to {configmap_name} ConfigMap")
           
           if not rollout_found:
               print("❌ ERROR: Rollout resource not found or structure unexpected!")
