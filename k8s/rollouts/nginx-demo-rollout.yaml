@@ -74,7 +74,7 @@ data:
     \ scale(1); }\n            50% { transform: scale(1.05); }\n        }\n    </style>\n\
     </head>\n<body>\n    <div class=\"container\">\n        <div class=\"status-banner\"\
     >\U0001F7E2 PREVIEW ENVIRONMENT</div>\n        <h1>GREEN VERSION</h1>\n      \
-    \  <div class=\"version\" >Version 2.0</div>\n        <div class=\"info\">\n \
+    \  <div class=\"version\" >Version 3.0</div>\n        <div class=\"info\">\n \
     \           <div class=\"badge\" >New Features</div>\n            <div class=\"\
     badge\">Enhanced</div>\n            <div class=\"badge\">Preview Mode</div>\n\
     \            <div class=\"badge\">Awaiting Promotion</div>\n        </div>\n \
