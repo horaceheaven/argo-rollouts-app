@@ -207,92 +207,126 @@ For a simpler demo without health analysis:
 - [x] Change EKS cluster name (changed to `app-cluster-us-west-2`)
 - [x] Rollback on fail (configured with `progressDeadlineSeconds: 300`)
 
-## Requirements
-- [] Rollback on failure
-- [] Auto sync on git push
-
-## Assumptions
-
-
-## Future Improvements
-- [ ] Add terraform to github actions pipeline for bootstrap and setup
-
-
 ## Test Scenarios
 
-### Scenario 1: Simulate Deployment Failure and Automatic Rollback
+### Scenario 1: End-to-End CI/CD Pipeline Validation
 
-**Objective:** Verify that a failed deployment automatically rolls back to the previous working revision.
-
-**Prerequisites:**
-- Application is deployed and running
-- You have `kubectl` access to the cluster
+**Objective:** Verify complete CI/CD pipeline from code push to deployment.
 
 **Steps:**
 
-1. **Check Current Status:**
+1. **Trigger Pipeline:**
    ```bash
-   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   # Make a change and push
+   echo "<!-- Test $(date) -->" >> nginx-app/html/index.html
+   git add nginx-app/html/index.html && git commit -m "test: CI/CD validation" && git push origin main
    ```
-   Note the current image tag and revision number.
 
-2. **Deploy a Broken Image:**
+2. **Validate Pipeline Stages:**
    ```bash
-   # Update the Helm values.yaml with an invalid image tag
-   # Or manually set an invalid image
+   # 1. GitHub Actions workflow
+   gh run list --workflow=build-and-deploy.yml --limit 1
+   # Or check: https://github.com/horaceheaven/argo-rollouts-app/actions
+   
+   # 2. ECR image exists
+   COMMIT=$(git rev-parse HEAD)
+   aws ecr describe-images --repository-name nginx-demo-app --image-ids imageTag=$COMMIT --region us-west-2
+   
+   # 3. Helm values updated
+   git pull && yq eval '.app.image.tag' helm-charts/nginx-demo/values.yaml
+   # Should match $COMMIT
+   
+   # 4. ArgoCD synced
+   kubectl get application nginx-gitops-demo -n argocd
+   kubectl get application nginx-gitops-demo -n argocd -o jsonpath='{.status.sync.status}' # Should be "Synced"
+   
+   # 5. New preview revision created
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   kubectl get pods -n nginx-demo -l app=nginx-demo
+   
+   # 6. Preview accessible
+   PREVIEW_URL=$(kubectl get ingress nginx-demo-preview -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PREVIEW_URL | grep -q "Version" && echo "✅ Preview accessible"
+   ```
+
+**Expected:** GitHub Actions → ECR push → values.yaml update → ArgoCD sync → Preview deployment (production unchanged)
+
+---
+
+### Scenario 2: Deployment Failure and Automatic Rollback
+
+**Objective:** Verify automatic rollback on deployment failure.
+
+**Steps:**
+
+1. **Deploy Broken Image:**
+   ```bash
+   # Option 1: Invalid image tag in values.yaml, then push
+   # Option 2: Direct kubectl (bypasses CI/CD)
    kubectl set image rollout/nginx-demo nginx=invalid-image:tag -n nginx-demo
    ```
-   Alternatively, update `helm-charts/nginx-demo/values.yaml` with an invalid image tag and push to Git.
 
-3. **Monitor Rollout Status:**
+2. **Monitor and Verify Rollback:**
    ```bash
-   # Watch the rollout status
+   # Watch rollout status
    kubectl argo rollouts get rollout nginx-demo -n nginx-demo -w
-   ```
-   You should see:
-   - Rollout enters "Progressing" state
-   - New ReplicaSet created but pods fail to start
-   - Status changes to "Degraded" after health check failures
-
-4. **Wait for Automatic Rollback:**
-   The rollout will automatically rollback if:
-   - Pods fail health checks (liveness/readiness probes)
-   - `progressDeadlineSeconds` (600 seconds) expires
-   - Pre-promotion or post-promotion analysis fails
-
-5. **Verify Rollback:**
-   ```bash
-   # Check rollout phase
-   kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.phase}'
-   # Should show "Healthy" after rollback
+   # Should see: Progressing → Degraded → Healthy (rollback)
    
-   # Check which revision is active
-   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
-   # Should show previous working revision as "stable, active"
-   
-   # Verify pods are running
-   kubectl get pods -n nginx-demo -l app=nginx-demo
-   # Should show pods from previous working revision
-   ```
-
-6. **Check Rollout History:**
-   ```bash
+   # Verify rollback completed
+   kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.phase}' # Should be "Healthy"
    kubectl argo rollouts history nginx-demo -n nginx-demo
+   
+   # Verify production still accessible
+   PROD_URL=$(kubectl get ingress nginx-demo -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PROD_URL | grep -q "Version" && echo "✅ Production accessible"
    ```
-   You should see the failed revision and the rollback to the previous revision.
 
-**Expected Result:**
-- ✅ Rollout detects failure within 600 seconds (`progressDeadlineSeconds`)
-- ✅ Automatically rolls back to previous working revision
-- ✅ Production service remains available throughout (zero downtime)
-- ✅ Rollout status returns to "Healthy"
+**Expected:** Rollout detects failure → Auto-rollback within 600s → Production remains available
 
-**Rollback Mechanisms Tested:**
-1. **Progress Deadline**: Rollout fails if not progressing within deadline
-2. **Health Probes**: Liveness/readiness probes detect unhealthy pods
-3. **Analysis Templates**: Pre/post-promotion analysis can trigger rollback
+**Rollback Triggers:**
+- Health probe failures (liveness/readiness)
+- `progressDeadlineSeconds` (600s) exceeded
+- Analysis template failures
 
-**Troubleshooting:**
-- If rollback doesn't happen automatically, check `progressDeadlineSeconds` value
-- Verify health probes are configured correctly
-- Check AnalysisTemplate resources exist: `kubectl get analysistemplate -n nginx-demo`
+---
+
+### Scenario 3: Blue/Green Promotion
+
+**Objective:** Verify blue/green promotion process.
+
+**Steps:**
+
+1. **Check State:**
+   ```bash
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   ACTIVE=$(kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.blueGreen.activeSelector}')
+   PREVIEW=$(kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.blueGreen.previewSelector}')
+   ```
+
+2. **Validate Environments:**
+   ```bash
+   # Preview
+   PREVIEW_URL=$(kubectl get ingress nginx-demo-preview -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PREVIEW_URL
+   
+   # Production
+   PROD_URL=$(kubectl get ingress nginx-demo -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PROD_URL
+   ```
+
+3. **Promote and Verify:**
+   ```bash
+   kubectl argo rollouts promote nginx-demo -n nginx-demo
+   
+   # Verify promotion
+   NEW_ACTIVE=$(kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.blueGreen.activeSelector}')
+   [ "$NEW_ACTIVE" = "$PREVIEW" ] && echo "✅ Promotion successful"
+   kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.phase}' # Should be "Healthy"
+   ```
+
+**Expected:** Preview and production differ → Promotion switches traffic → Zero downtime
+
+## Assumptions
+
+## Future Improvements
+- [ ] Add terraform to github actions pipeline for bootstrap and setup
