@@ -172,7 +172,7 @@ spec:
       volumes:
       - name: html
         configMap:
-          name: nginx-green
+          name: nginx-green  # Using green ConfigMap for new deployments
   strategy:
     blueGreen:
       activeService: nginx-demo
