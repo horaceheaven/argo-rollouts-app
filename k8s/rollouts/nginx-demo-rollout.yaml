@@ -172,7 +172,7 @@ spec:
       volumes:
       - name: html
         configMap:
-          name: nginx-green
+          name: nginx-blue  # Production uses blue, preview will be updated separately
   strategy:
     blueGreen:
       activeService: nginx-demo
