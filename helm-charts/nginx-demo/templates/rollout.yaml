@@ -54,6 +54,11 @@ spec:
       volumes:
         - name: html
           configMap:
+            # Use green for preview, blue for production
+            # When a new revision is created, it uses green (preview)
+            # After promotion, we need to update the blue ConfigMap content
+            # to match the green ConfigMap, then switch the template to use blue
+            # This is a limitation: ConfigMap is baked into pod template
             name: nginx-{{ .Values.configMap.name }}
   strategy:
     blueGreen:

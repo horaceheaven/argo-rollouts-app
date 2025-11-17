@@ -12,9 +12,12 @@ app:
     tag: "fd0e5109ba2bad90bd7c2a71fe90986b982ae079" # Will be set by GitHub Actions workflow
     pullPolicy: IfNotPresent
 # ConfigMap selection
-# Use 'blue' for production, 'green' for preview
+# IMPORTANT: ConfigMap is baked into pod template when ReplicaSet is created
+# - Set to 'green' for new preview revisions (shows preview content)
+# - After promotion, update this to 'blue' and deploy again to switch production to blue
+# - Or manually copy green ConfigMap content to blue ConfigMap after promotion
 configMap:
-  name: blue # Options: 'blue' or 'green'
+  name: green # Options: 'blue' or 'green' - affects which ConfigMap NEW revisions use
 # Blue/Green deployment configuration
 blueGreen:
   activeService: nginx-demo
