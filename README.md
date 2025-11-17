@@ -219,3 +219,80 @@ For a simpler demo without health analysis:
 
 
 ## Test Scenarios
+
+### Scenario 1: Simulate Deployment Failure and Automatic Rollback
+
+**Objective:** Verify that a failed deployment automatically rolls back to the previous working revision.
+
+**Prerequisites:**
+- Application is deployed and running
+- You have `kubectl` access to the cluster
+
+**Steps:**
+
+1. **Check Current Status:**
+   ```bash
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   ```
+   Note the current image tag and revision number.
+
+2. **Deploy a Broken Image:**
+   ```bash
+   # Update the Helm values.yaml with an invalid image tag
+   # Or manually set an invalid image
+   kubectl set image rollout/nginx-demo nginx=invalid-image:tag -n nginx-demo
+   ```
+   Alternatively, update `helm-charts/nginx-demo/values.yaml` with an invalid image tag and push to Git.
+
+3. **Monitor Rollout Status:**
+   ```bash
+   # Watch the rollout status
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo -w
+   ```
+   You should see:
+   - Rollout enters "Progressing" state
+   - New ReplicaSet created but pods fail to start
+   - Status changes to "Degraded" after health check failures
+
+4. **Wait for Automatic Rollback:**
+   The rollout will automatically rollback if:
+   - Pods fail health checks (liveness/readiness probes)
+   - `progressDeadlineSeconds` (600 seconds) expires
+   - Pre-promotion or post-promotion analysis fails
+
+5. **Verify Rollback:**
+   ```bash
+   # Check rollout phase
+   kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.phase}'
+   # Should show "Healthy" after rollback
+   
+   # Check which revision is active
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   # Should show previous working revision as "stable, active"
+   
+   # Verify pods are running
+   kubectl get pods -n nginx-demo -l app=nginx-demo
+   # Should show pods from previous working revision
+   ```
+
+6. **Check Rollout History:**
+   ```bash
+   kubectl argo rollouts history nginx-demo -n nginx-demo
+   ```
+   You should see the failed revision and the rollback to the previous revision.
+
+**Expected Result:**
+- ✅ Rollout detects failure within 600 seconds (`progressDeadlineSeconds`)
+- ✅ Automatically rolls back to previous working revision
+- ✅ Production service remains available throughout (zero downtime)
+- ✅ Rollout status returns to "Healthy"
+
+**Rollback Mechanisms Tested:**
+1. **Progress Deadline**: Rollout fails if not progressing within deadline
+2. **Health Probes**: Liveness/readiness probes detect unhealthy pods
+3. **Analysis Templates**: Pre/post-promotion analysis can trigger rollback
+
+**Troubleshooting:**
+- If rollback doesn't happen automatically, check `progressDeadlineSeconds` value
+- Verify health probes are configured correctly
+- Check AnalysisTemplate resources exist: `kubectl get analysistemplate -n nginx-demo`
