@@ -17,7 +17,7 @@ app:
 # - After promotion, update this to 'blue' and deploy again to switch production to blue
 # - Or manually copy green ConfigMap content to blue ConfigMap after promotion
 configMap:
-  name: blue # Options: 'blue' or 'green' - affects which ConfigMap NEW revisions use
+  name: green # Options: 'blue' or 'green' - affects which ConfigMap NEW revisions use
 # Blue/Green deployment configuration
 blueGreen:
   activeService: nginx-demo
