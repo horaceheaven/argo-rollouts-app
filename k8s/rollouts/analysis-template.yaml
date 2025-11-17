@@ -11,9 +11,9 @@ spec:
     # HTTP availability check using a simple script
     - name: http-success-rate
       interval: 30s
-      count: 10  # Run 10 checks over 5 minutes
+      count: 2  # Run 2 checks over 1 minute
       successCondition: result[0] >= 0.8  # 80% success rate required
-      failureLimit: 3  # Rollback after 3 consecutive failures
+      failureLimit: 2  # Rollback after 2 consecutive failures
       provider:
         job:
           spec:
@@ -46,9 +46,9 @@ spec:
     # Monitor active service after promotion
     - name: post-promotion-health
       interval: 30s
-      count: 10  # Monitor for 5 minutes after promotion
+      count: 2  # Monitor for 1 minute after promotion
       successCondition: result[0] >= 0.9  # 90% success rate required
-      failureLimit: 3  # Rollback if 3 consecutive failures
+      failureLimit: 2  # Rollback if 2 consecutive failures
       provider:
         job:
           spec:
