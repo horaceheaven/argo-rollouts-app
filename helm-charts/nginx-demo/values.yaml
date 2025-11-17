@@ -9,7 +9,7 @@ app:
   name: nginx-demo
   image:
     repository: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app
-    tag: "fb75c5ad30b1f325493c04dd2b04d976808f5dbb" # Will be set by GitHub Actions workflow
+    tag: "ba494633e3ef46dcb624a9e902f68808991f7435" # Will be set by GitHub Actions workflow
     pullPolicy: IfNotPresent
 # ConfigMap selection
 # IMPORTANT: ConfigMap is baked into pod template when ReplicaSet is created
