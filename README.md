@@ -195,12 +195,12 @@ For a simpler demo without health analysis:
 1. **Code Push**: Developer pushes code changes to the `nginx-app/` directory in GitHub
 2. **CI Trigger**: GitHub Actions workflow automatically triggers on push to `main` branch
 3. **Build & Push**: Workflow builds Docker image and pushes to Amazon ECR with SHA-based tags
-4. **GitOps Update**: Workflow updates the Kubernetes manifest (`k8s/rollouts/nginx-demo-rollout.yaml`) with the new image tag and commits back to Git
+4. **GitOps Update**: Workflow updates the Helm values file (`helm-charts/nginx-demo/values.yaml`) with the new image tag and commits back to Git
 5. **ArgoCD Sync**: ArgoCD detects the Git change and automatically syncs the updated manifest to the cluster
 6. **Blue/Green Deployment**: Argo Rollouts creates a new "Green" revision alongside the existing "Blue" revision
 7. **Preview Testing**: Green revision is available via preview service/ingress for testing
 8. **Manual Promotion**: After validation, the Green revision is manually promoted to Active (Blue service switches traffic)
-9. **Auto Rollback**: If deployment fails within 5 minutes, Argo Rollouts automatically rolls back to the previous revision
+9. **Auto Rollback**: If deployment fails within 10 minutes (`progressDeadlineSeconds: 600`), Argo Rollouts automatically rolls back to the previous revision
 10. **Traffic Routing**: AWS Application Load Balancer routes production traffic to the Active service
 
 ## TODO
@@ -242,7 +242,7 @@ For a simpler demo without health analysis:
    
    # 5. New preview revision created
    kubectl argo rollouts get rollout nginx-demo -n nginx-demo
-   kubectl get pods -n nginx-demo -l app=nginx-demo
+   kubectl get pods -n nginx-demo -l app.kubernetes.io/name=nginx-demo
    
    # 6. Preview accessible
    PREVIEW_URL=$(kubectl get ingress nginx-demo-preview -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
@@ -262,8 +262,8 @@ For a simpler demo without health analysis:
 1. **Deploy Broken Image:**
    ```bash
    # Option 1: Invalid image tag in values.yaml, then push
-   # Option 2: Direct kubectl (bypasses CI/CD)
-   kubectl set image rollout/nginx-demo nginx=invalid-image:tag -n nginx-demo
+   # Option 2: Direct kubectl argo rollouts (bypasses CI/CD)
+   kubectl argo rollouts set image nginx-demo nginx=invalid-image:tag -n nginx-demo
    ```
 
 2. **Monitor and Verify Rollback:**
@@ -274,7 +274,11 @@ For a simpler demo without health analysis:
    
    # Verify rollback completed
    kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.phase}' # Should be "Healthy"
-   kubectl argo rollouts history nginx-demo -n nginx-demo
+   
+   # View rollout history (revisions)
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   # Or view ReplicaSets (shows revision history)
+   kubectl get replicaset -n nginx-demo -l app.kubernetes.io/name=nginx-demo --sort-by=.metadata.creationTimestamp
    
    # Verify production still accessible
    PROD_URL=$(kubectl get ingress nginx-demo -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
@@ -325,8 +329,6 @@ For a simpler demo without health analysis:
    ```
 
 **Expected:** Preview and production differ → Promotion switches traffic → Zero downtime
-
-## Assumptions
 
 ## Future Improvements
 - [ ] Add terraform to github actions pipeline for bootstrap and setup
