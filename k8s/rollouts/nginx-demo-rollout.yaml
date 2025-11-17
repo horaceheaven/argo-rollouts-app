@@ -126,7 +126,7 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
-  progressDeadlineSeconds: 600  # 10 minutes to allow time for pre-promotion analysis
+  progressDeadlineSeconds: 600
   selector:
     matchLabels:
       app: nginx-demo
@@ -138,7 +138,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:6323d1166111708b27f6c4f818c63dad1471dc1b
+        image: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app:3ca851480bd4cd5736e9981d00c4c5bba41d617c
         ports:
         - name: http
           containerPort: 80
@@ -172,7 +172,7 @@ spec:
       volumes:
       - name: html
         configMap:
-          name: nginx-green  # Using green ConfigMap for new deployments
+          name: nginx-green
   strategy:
     blueGreen:
       activeService: nginx-demo
