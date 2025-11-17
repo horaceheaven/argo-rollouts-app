@@ -177,12 +177,15 @@ spec:
     blueGreen:
       activeService: nginx-demo
       previewService: nginx-demo-preview
-      autoPromotionEnabled: false
+      autoPromotionEnabled: false  # Set to true for automatic promotion after preview
       autoPromotionSeconds: 30
       scaleDownDelaySeconds: 30
+      # Optional: Pre-promotion health checks (requires AnalysisTemplate)
+      # Comment out these sections for a simpler demo without analysis
       prePromotionAnalysis:
         templates:
         - templateName: nginx-simple-health-check
+      # Optional: Post-promotion monitoring (requires AnalysisTemplate)
       postPromotionAnalysis:
         templates:
         - templateName: nginx-post-promotion-check

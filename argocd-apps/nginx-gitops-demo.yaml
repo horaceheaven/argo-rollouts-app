@@ -43,10 +43,10 @@ spec:
         factor: 2
         maxDuration: 3m
   
-  # Ignore differences for certain fields
+  # Ignore differences for certain fields (useful if you manually scale rollouts)
   ignoreDifferences:
-    - group: apps
-      kind: Deployment
+    - group: argoproj.io
+      kind: Rollout
       jsonPointers:
-        - /spec/replicas  # Example: ignore replica differences
+        - /spec/replicas  # Ignore replica count differences (if manually scaled)
 

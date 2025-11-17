@@ -140,6 +140,52 @@ Get the application ingress URL:
 kubectl get ingress -n nginx-demo
 ```
 
+## Demonstrating Blue/Green Deployment
+
+### Quick Demo Steps
+
+1. **Check Current Status**:
+   ```bash
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   ```
+
+2. **Trigger a New Deployment**:
+   - Make a change to `nginx-app/html/index.html` and push to `main`
+   - GitHub Actions will build a new image and update the manifest
+   - ArgoCD will automatically sync the changes
+
+3. **View Blue/Green State**:
+   ```bash
+   # See both blue (active) and green (preview) revisions
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   
+   # Get preview service URL
+   kubectl get ingress nginx-demo-preview -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+   
+   # Get production service URL
+   kubectl get ingress nginx-demo -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+   ```
+
+4. **Test Preview Environment**:
+   - Visit the preview ingress URL to see the green version
+   - Verify it's working correctly
+
+5. **Promote Green to Production**:
+   ```bash
+   kubectl argo rollouts promote nginx-demo -n nginx-demo
+   ```
+
+6. **Verify Promotion**:
+   - Visit the production ingress URL
+   - You should see the new version (previously green, now active)
+   - The old blue version will be scaled down after 30 seconds
+
+### Simplifying the Demo
+
+For a simpler demo without health analysis:
+- Comment out `prePromotionAnalysis` and `postPromotionAnalysis` in the Rollout spec
+- The AnalysisTemplates are optional and can be skipped for basic demonstrations
+
 ## Architecture
 
 ![GitOpsPipeline](static/GitOpsPIpeline.png "GitOps Pipeline")
