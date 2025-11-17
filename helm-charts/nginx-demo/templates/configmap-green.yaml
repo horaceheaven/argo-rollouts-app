@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-green
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "nginx-demo.labels" . | nindent 4 }}
+    version: green
+data:
+  index.html: |-
+{{ include "nginx-demo.htmlContent" (dict "root" . "env" "green") | indent 4 }}
+

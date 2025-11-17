@@ -13,7 +13,7 @@ env:
   AWS_REGION: us-west-2
   ECR_REPOSITORY: nginx-demo-app
   GITOPS_REPO: horaceheaven/argo-rollouts-app
-  GITOPS_PATH: k8s/rollouts/nginx-demo-rollout.yaml
+  GITOPS_PATH: helm-charts/nginx-demo/values.yaml
 
 jobs:
   build-and-push:
@@ -125,96 +125,34 @@ jobs:
           ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           echo "registry=${ECR_REGISTRY}" >> $GITHUB_OUTPUT
       
-      - name: Update image in rollout manifest
+      - name: Update image in Helm values
         run: |
           cd gitops-repo
           IMAGE_TAG="${{ steps.ecr-info.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          IMAGE_REPO="${{ steps.ecr-info.outputs.registry }}/${{ env.ECR_REPOSITORY }}"
+          IMAGE_SHA="${{ github.sha }}"
           
-          # Count total documents before update
-          DOC_COUNT=$(grep -c "^---$" "${{ env.GITOPS_PATH }}" || echo "0")
-          DOC_COUNT=$((DOC_COUNT + 1))  # Add 1 for the first document
-          echo "📄 Found $DOC_COUNT documents in manifest"
+          echo "📦 Updating Helm values.yaml"
+          echo "  Image: $IMAGE_TAG"
+          echo "  Repository: $IMAGE_REPO"
+          echo "  Tag: $IMAGE_SHA"
           
-          # Use a Python script to safely update only the Rollout image while preserving all documents
-          python3 << PYTHON_SCRIPT
-          import yaml
-          import sys
-          import os
+          # Update image repository and tag in values.yaml
+          yq eval ".app.image.repository = \"$IMAGE_REPO\"" -i "${{ env.GITOPS_PATH }}"
+          yq eval ".app.image.tag = \"$IMAGE_SHA\"" -i "${{ env.GITOPS_PATH }}"
           
-          file_path = "${{ env.GITOPS_PATH }}"
-          image_tag = "${IMAGE_TAG}"
+          # Verify the update
+          UPDATED_REPO=$(yq eval '.app.image.repository' "${{ env.GITOPS_PATH }}")
+          UPDATED_TAG=$(yq eval '.app.image.tag' "${{ env.GITOPS_PATH }}")
           
-          # Read all documents
-          with open(file_path, 'r') as f:
-              documents = list(yaml.safe_load_all(f))
-          
-          original_count = len(documents)
-          print(f"📄 Loaded {original_count} documents")
-          
-          # Extract git hash from image tag (everything after the last colon)
-          git_hash = image_tag.split(':')[-1]
-          print(f"🔖 Git hash: {git_hash}")
-          
-          # Find and update the Rollout document and ConfigMaps
-          rollout_found = False
-          for doc in documents:
-              if doc and doc.get('kind') == 'Rollout':
-                  if 'spec' in doc and 'template' in doc['spec']:
-                      if 'spec' in doc['spec']['template'] and 'containers' in doc['spec']['template']['spec']:
-                          if len(doc['spec']['template']['spec']['containers']) > 0:
-                              doc['spec']['template']['spec']['containers'][0]['image'] = image_tag
-                              rollout_found = True
-                              print(f"✅ Updated Rollout image to: {image_tag}")
-              
-              # Update git hash in ConfigMap HTML (both blue and green)
-              elif doc and doc.get('kind') == 'ConfigMap':
-                  configmap_name = doc.get('metadata', {}).get('name', '')
-                  if 'nginx-blue' in configmap_name or 'nginx-green' in configmap_name:
-                      if 'data' in doc and 'index.html' in doc['data']:
-                          html_content = doc['data']['index.html']
-                          # Replace git hash in HTML (look for existing hash or placeholder)
-                          import re
-                          # Pattern to find existing git hash display
-                          hash_pattern = r'(<div style="font-size: 18px; font-weight: bold; color: #fff;">)([a-f0-9]{40}|{{GIT_HASH}})(</div>)'
-                          replacement = f'\\1{git_hash}\\3'
-                          if re.search(hash_pattern, html_content):
-                              doc['data']['index.html'] = re.sub(hash_pattern, replacement, html_content)
-                              print(f"✅ Updated git hash in {configmap_name} ConfigMap")
-                          else:
-                              # If no existing hash display, add it before closing container div
-                              # For production (blue), add after the service info
-                              if 'nginx-blue' in configmap_name:
-                                  insert_point = '</div>\\n    </body>'
-                                  git_hash_html = f'        <div style="margin-top: 30px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px; font-family: monospace;">\\n            <div style="font-size: 14px; opacity: 0.9; margin-bottom: 5px;">Git Commit:</div>\\n            <div style="font-size: 18px; font-weight: bold; color: #fff;">{git_hash}</div>\\n        </div>\\n'
-                                  if insert_point in html_content:
-                                      doc['data']['index.html'] = html_content.replace(insert_point, git_hash_html + insert_point)
-                                      print(f"✅ Added git hash display to {configmap_name} ConfigMap")
-                              # For preview (green), add after promotion message
-                              elif 'nginx-green' in configmap_name:
-                                  insert_point = '</div>\\n    </body>'
-                                  git_hash_html = f'        <div style="margin-top: 30px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px; font-family: monospace;">\\n            <div style="font-size: 14px; opacity: 0.9; margin-bottom: 5px;">Git Commit:</div>\\n            <div style="font-size: 18px; font-weight: bold; color: #fff;">{git_hash}</div>\\n        </div>\\n'
-                                  if insert_point in html_content:
-                                      doc['data']['index.html'] = html_content.replace(insert_point, git_hash_html + insert_point)
-                                      print(f"✅ Added git hash display to {configmap_name} ConfigMap")
-          
-          if not rollout_found:
-              print("❌ ERROR: Rollout resource not found or structure unexpected!")
-              sys.exit(1)
-          
-          # Verify document count unchanged
-          if len(documents) != original_count:
-              print(f"❌ ERROR: Document count changed from {original_count} to {len(documents)}!")
-              sys.exit(1)
-          
-          # Write all documents back
-          with open(file_path, 'w') as f:
-              for i, doc in enumerate(documents):
-                  if i > 0:
-                      f.write('---\n')
-                  yaml.dump(doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-          
-          print(f"✅ Successfully updated manifest, preserved {len(documents)} documents")
-          PYTHON_SCRIPT
+          if [ "$UPDATED_REPO" != "$IMAGE_REPO" ] || [ "$UPDATED_TAG" != "$IMAGE_SHA" ]; then
+            echo "❌ ERROR: Failed to update Helm values!"
+            echo "Expected repo: $IMAGE_REPO"
+            echo "Got repo: $UPDATED_REPO"
+            echo "Expected tag: $IMAGE_SHA"
+            echo "Got tag: $UPDATED_TAG"
+            exit 1
+          fi
           
           # Verify YAML is still valid
           if ! yq eval '.' "${{ env.GITOPS_PATH }}" > /dev/null 2>&1; then
@@ -222,23 +160,9 @@ jobs:
             exit 1
           fi
           
-          # Verify Rollout was updated correctly
-          ROLLOUT_IMAGE=$(yq eval 'select(.kind == "Rollout") | .spec.template.spec.containers[0].image' "${{ env.GITOPS_PATH }}" -N)
-          if [ "$ROLLOUT_IMAGE" != "$IMAGE_TAG" ]; then
-            echo "❌ ERROR: Rollout image verification failed!"
-            echo "Expected: $IMAGE_TAG"
-            echo "Got: $ROLLOUT_IMAGE"
-            exit 1
-          fi
-          
-          # Verify all required resource types still exist
-          for resource in Namespace ConfigMap Service Rollout Ingress; do
-            if ! yq eval "select(.kind == \"$resource\")" "${{ env.GITOPS_PATH }}" -N | grep -q "kind: $resource"; then
-              echo "⚠️  WARNING: $resource resource missing"
-            fi
-          done
-          
-          echo "✅ Image update completed successfully"
+          echo "✅ Successfully updated Helm values.yaml"
+          echo "   Repository: $UPDATED_REPO"
+          echo "   Tag: $UPDATED_TAG"
       
       - name: Commit and push changes
         run: |

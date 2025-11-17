@@ -1,0 +1,14 @@
+apiVersion: v2
+name: nginx-demo
+description: A Helm chart for Nginx demo application with Argo Rollouts blue/green deployment
+type: application
+version: 1.0.0
+appVersion: "3.0.0"
+keywords:
+  - nginx
+  - argo-rollouts
+  - blue-green
+  - gitops
+maintainers:
+  - name: DevOps Team
+

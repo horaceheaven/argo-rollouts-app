@@ -13,11 +13,15 @@ spec:
   source:
     repoURL: https://github.com/horaceheaven/argo-rollouts-app.git
     targetRevision: main  # or master, depending on your default branch
-    path: k8s/rollouts    # Path to your manifests
-    
-    # Optional: If you want to use a specific file
-    # directory:
-    #   recurse: true
+    path: helm-charts/nginx-demo    # Path to Helm chart
+    helm:
+      valueFiles:
+        - values.yaml
+      # Set image tag from environment or use default
+      # values: |
+      #   app:
+      #     image:
+      #       tag: "{{ARGOCD_APP_REVISION}}"
   
   # DESTINATION: Where to deploy
   destination:

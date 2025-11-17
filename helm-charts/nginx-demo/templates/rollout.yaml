@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ .Values.app.name }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "nginx-demo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.rollout.replicas }}
+  revisionHistoryLimit: {{ .Values.rollout.revisionHistoryLimit }}
+  progressDeadlineSeconds: {{ .Values.rollout.progressDeadlineSeconds }}
+  selector:
+    matchLabels:
+      {{- include "nginx-demo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nginx-demo.selectorLabels" . | nindent 8 }}
+        version: {{ .Values.configMap.name }}
+    spec:
+      containers:
+        - name: nginx
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          {{- if .Values.healthChecks.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.healthChecks.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthChecks.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthChecks.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthChecks.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.healthChecks.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.healthChecks.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthChecks.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthChecks.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthChecks.readinessProbe.failureThreshold }}
+          {{- end }}
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: html
+          configMap:
+            name: nginx-{{ .Values.configMap.name }}
+  strategy:
+    blueGreen:
+      activeService: {{ .Values.blueGreen.activeService }}
+      previewService: {{ .Values.blueGreen.previewService }}
+      autoPromotionEnabled: {{ .Values.blueGreen.autoPromotionEnabled }}
+      autoPromotionSeconds: {{ .Values.blueGreen.autoPromotionSeconds }}
+      scaleDownDelaySeconds: {{ .Values.blueGreen.scaleDownDelaySeconds }}
+      {{- if .Values.analysis.prePromotion.enabled }}
+      prePromotionAnalysis:
+        templates:
+          - templateName: {{ .Values.analysis.prePromotion.templateName }}
+      {{- end }}
+      {{- if .Values.analysis.postPromotion.enabled }}
+      postPromotionAnalysis:
+        templates:
+          - templateName: {{ .Values.analysis.postPromotion.templateName }}
+      {{- end }}
+
