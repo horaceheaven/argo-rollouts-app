@@ -1,0 +1,56 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-gitops-demo
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  # SOURCE: Your GitHub Repository
+  source:
+    repoURL: https://github.com/horaceheaven/argo-rollouts-app.git
+    targetRevision: main  # or master, depending on your default branch
+    path: helm-charts/nginx-demo    # Path to Helm chart
+    helm:
+      valueFiles:
+        - values.yaml
+      # Set image tag from environment or use default
+      # values: |
+      #   app:
+      #     image:
+      #       tag: "{{ARGOCD_APP_REVISION}}"
+  
+  # DESTINATION: Where to deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nginx-demo
+  
+  # AUTO-SYNC CONFIGURATION (This is the GitOps magic!)
+  syncPolicy:
+    automated:
+      prune: true        # Delete resources not in Git
+      selfHeal: true     # Auto-correct manual changes
+      allowEmpty: false
+    
+    syncOptions:
+      - CreateNamespace=true  # Auto-create namespace
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Ignore differences for certain fields (useful if you manually scale rollouts)
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Rollout
+      jsonPointers:
+        - /spec/replicas  # Ignore replica count differences (if manually scaled)
+

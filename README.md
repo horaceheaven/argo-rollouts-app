@@ -1,345 +1,334 @@
-# ArgoCD on Amazon EKS
+## Overview
 
-This tutorial guides you through deploying an Amazon EKS cluster with addons configured via ArgoCD, employing the [GitOps Bridge Pattern](https://github.com/gitops-bridge-dev).
+This repository implements a complete **GitOps-based CI/CD pipeline** for containerized applications on AWS EKS using ArgoCD and Argo Rollouts. The infrastructure automates the deployment of applications with **blue/green deployment strategies**, providing zero-downtime releases and automated rollback capabilities.
 
-<img src="https://raw.githubusercontent.com/aws-ia/terraform-aws-eks-blueprints/main/patterns/gitops/getting-started-argocd/static/gitops-bridge.drawio.png" width=100%>
+### Key Features
 
-The [GitOps Bridge Pattern](https://github.com/gitops-bridge-dev) enables Kubernetes administrators to utilize Infrastructure as Code (IaC) and GitOps tools for deploying Kubernetes Addons and Workloads. Addons often depend on Cloud resources that are external to the cluster. The configuration metadata for these external resources is required by the Addons' Helm charts. While IaC is used to create these cloud resources, it is not used to install the Helm charts. Instead, the IaC tool stores this metadata either within GitOps resources in the cluster or in a Git repository. The GitOps tool then extracts these metadata values and passes them to the Helm chart during the Addon installation process. This mechanism forms the bridge between IaC and GitOps, hence the term "GitOps Bridge."
+- **GitOps Workflow**: Infrastructure and application deployments are managed through Git, ensuring declarative configuration and audit trails
+- **CI/CD Pipeline**: GitHub Actions automatically builds Docker images, pushes to ECR, and updates Kubernetes manifests on every code change
+- **Blue/Green Deployments**: Argo Rollouts enables safe, zero-downtime deployments with manual promotion gates
+- **Automated Rollback**: Configured to automatically rollback failed deployments within 5 minutes
+- **AWS Native**: Leverages EKS, ECR, VPC, and AWS Load Balancer Controller for production-ready infrastructure
+- **Secure by Default**: GitHub Actions uses OIDC for AWS authentication (no access keys stored)
 
-Additional examples available on the [GitOps Bridge Pattern](https://github.com/gitops-bridge-dev):
+### Architecture Components
 
-- [argocd-ingress](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/argocd-ingress)
-- [aws-secrets-manager](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/aws-secrets-manager)
-- [crossplane](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/crossplane)
-- [external-secrets](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/external-secrets)
-- [multi-cluster/distributed](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/multi-cluster/distributed)
-- [multi-cluster/hub-spoke](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/multi-cluster/hub-spoke)
-- [multi-cluster/hub-spoke-shared](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/multi-cluster/hub-spoke-shared)
-- [private-git](https://github.com/gitops-bridge-dev/gitops-bridge/tree/main/argocd/iac/terraform/examples/eks/private-git)
+1. **Infrastructure Layer** (Terraform):
+   - VPC with public/private subnets and NAT Gateway
+   - EKS cluster with managed node groups
+   - ECR repository for Docker images
+   - IAM roles and OIDC provider for GitHub Actions
 
-## Prerequisites
+2. **GitOps Layer** (ArgoCD):
+   - GitOps Bridge for bootstrapping cluster addons
+   - ArgoCD Application for deploying workloads
+   - Automatic synchronization from Git repository
 
-Before you begin, make sure you have the following command line tools installed:
+3. **Deployment Layer** (Argo Rollouts):
+   - Blue/Green deployment strategy
+   - Active and Preview services
+   - Manual promotion gates (auto-promotion disabled by default)
 
-- git
-- terraform
-- kubectl
-- argocd
+4. **CI/CD Layer** (GitHub Actions):
+   - Automated Docker image builds
+   - ECR image push with SHA-based tagging
+   - GitOps manifest updates
 
-## (Optional) Fork the GitOps git repositories
+## Getting Started
 
-See the appendix section [Fork GitOps Repositories](#fork-gitops-repositories) for more info on the terraform variables to override.
+### Prerequisites
 
-## Deploy the EKS Cluster
+- AWS CLI configured with appropriate credentials
+- Terraform >= 1.0
+- kubectl installed
+- AWS permissions to create VPC, EKS, ECR resources
 
-Initialize Terraform and deploy the EKS cluster:
+### Step 1: Provision Infrastructure
 
-```shell
-terraform init
+Deploy the infrastructure in stages for better visibility and error handling:
+
+```bash
+# Create VPC and networking components
 terraform apply -target="module.vpc" -auto-approve
+
+# Create EKS cluster and node groups
 terraform apply -target="module.eks" -auto-approve
+
+# Create remaining resources (ECR, IAM roles, outputs)
 terraform apply -auto-approve
 ```
 
-To retrieve `kubectl` config, execute the terraform output command:
+### Step 2: Configure kubectl
 
-```shell
-terraform output -raw configure_kubectl
+Connect your local kubectl to the EKS cluster:
+
+```bash
+aws eks --region us-west-2 update-kubeconfig --name app-cluster-us-west-2
 ```
 
-The expected output will have two lines you run in your terminal
+Verify access:
 
-```text
-export KUBECONFIG="/tmp/getting-started-gitops"
-aws eks --region us-west-2 update-kubeconfig --name getting-started-gitops
+```bash
+kubectl get nodes
 ```
 
->The first line sets the `KUBECONFIG` environment variable to a temporary file
-that includes the cluster name. The second line uses the `aws` CLI to populate
-that temporary file with the `kubectl` configuration. This approach offers the
-advantage of not altering your existing `kubectl` context, allowing you to work
-in other terminal windows without interference.
+### Step 3: Bootstrap GitOps Addons
 
-Terraform will add GitOps Bridge Metadata to the ArgoCD secret.
-The annotations contain metadata for the addons' Helm charts and ArgoCD ApplicationSets.
+Bootstrap ArgoCD and cluster addons using the GitOps Bridge:
 
-```shell
-kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=cluster -o json | jq '.items[0].metadata.annotations'
-```
-
-The output looks like the following:
-
-```json
-{
-  "addons_repo_basepath": "argocd/",
-  "addons_repo_path": "bootstrap/control-plane/addons",
-  "addons_repo_revision": "main",
-  "addons_repo_url": "https://github.com/aws-samples/eks-blueprints-add-ons",
-  "aws_account_id": "0123456789",
-  "aws_cluster_name": "getting-started-gitops",
-  "aws_load_balancer_controller_iam_role_arn": "arn:aws:iam::0123456789:role/alb-controller",
-  "aws_load_balancer_controller_namespace": "kube-system",
-  "aws_load_balancer_controller_service_account": "aws-load-balancer-controller-sa",
-  "aws_region": "us-west-2",
-  "aws_vpc_id": "vpc-001d3f00151bbb731",
-  "cluster_name": "in-cluster",
-  "environment": "dev",
-  "workload_repo_basepath": "patterns/gitops/",
-  "workload_repo_path": "getting-started-argocd/k8s",
-  "workload_repo_revision": "main",
-  "workload_repo_url": "https://github.com/csantanapr/terraform-aws-eks-blueprints"
-}
-```
-
-The labels offer a straightforward way to enable or disable an addon in ArgoCD for the cluster.
-
-```shell
-kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=cluster -o json | jq '.items[0].metadata.labels' | grep -v false | jq .
-```
-
-The output looks like the following:
-
-```json
-{
-  "argocd.argoproj.io/secret-type": "cluster",
-  "aws_cluster_name": "getting-started-gitops",
-  "cluster_name": "in-cluster",
-  "enable_argocd": "true",
-  "enable_aws_load_balancer_controller": "true",
-  "enable_metrics_server": "true",
-  "environment": "dev",
-  "kubernetes_version": "1.28"
-}
-```
-
-## Deploy the Addons
-
-Bootstrap the addons using ArgoCD:
-
-```shell
+```bash
 kubectl apply --server-side -f bootstrap/addons.yaml
 ```
 
-### Monitor GitOps Progress for Addons
+Wait for ArgoCD to be ready (this may take 2-3 minutes):
 
-Wait until all the ArgoCD applications' `HEALTH STATUS` is `Healthy`.
-Use `Ctrl+C` or `Cmd+C` to exit the `watch` command. ArgoCD Applications
-can take a couple of minutes in order to achieve the Healthy status.
-
-```shell
-kubectl get applications -n argocd -w
+```bash
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=300s
 ```
 
-The expected output should look like the following:
+### Step 4: Access ArgoCD UI
 
-```text
-NAME                                            SYNC STATUS   HEALTH STATUS
-addon-in-cluster-argo-cd                        Synced        Healthy
-addon-in-cluster-aws-load-balancer-controller   Synced        Healthy
-addon-in-cluster-metrics-server                 Synced        Healthy
-cluster-addons                                  Synced        Healthy
-```
+Get the ArgoCD access credentials:
 
-### Verify the Addons
-
-Verify that the addons are ready:
-
-```shell
-kubectl get deployment -n kube-system \
-  aws-load-balancer-controller \
-  metrics-server
-kubectl get deploy -n argocd \
-  argo-cd-argocd-applicationset-controller \
-  argo-cd-argocd-repo-server \
-  argo-cd-argocd-server
-```
-
-The expected output should look like the following:
-
-```text
-NAME                                       READY   UP-TO-DATE   AVAILABLE   AGE
-aws-load-balancer-controller               2/2     2            2           7m21s
-metrics-server                             1/1     1            1           7m41s
-argo-cd-argocd-applicationset-controller   1/1     1            1           109m
-argo-cd-argocd-repo-server                 1/1     1            1           109m
-argo-cd-argocd-server                      1/1     1            1           109m
-```
-
-## (Optional) Access ArgoCD
-
-Access to the ArgoCD's UI is completely optional, if you want to do it,
-run the commands shown in the Terraform output as the example below:
-
-```shell
+```bash
 terraform output -raw access_argocd
 ```
 
-The expected output should contain the `kubectl` config followed by `kubectl` command to retrieve
-the URL, username, password to login into ArgoCD UI or CLI.
+This will display:
+- ArgoCD admin username (`admin`)
+- Initial admin password
+- ArgoCD server URL (if LoadBalancer is configured)
 
-```text
-echo "ArgoCD Username: admin"
-echo "ArgoCD Password: $(kubectl get secrets argocd-initial-admin-secret -n argocd --template="{{index .data.password | base64decode}}")"
-echo "ArgoCD URL: https://$(kubectl get svc -n argocd argo-cd-argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+Alternatively, use port-forwarding:
+
+```bash
+kubectl port-forward -n argocd svc/argo-cd-argocd-server 8080:80
+# Access at http://localhost:8080
 ```
 
-## Deploy the Workloads
+### Step 5: Deploy the Application
 
-Deploy a sample application located in [k8s/game-2048.yaml](k8s/game-2048.yaml) using ArgoCD:
+Create the ArgoCD Application that monitors the GitOps repository:
 
-```shell
-kubectl apply --server-side -f bootstrap/workloads.yaml
+```bash
+kubectl apply -f argocd-apps/nginx-gitops-demo.yaml
 ```
 
-### Monitor GitOps Progress for Workloads
+This creates an ArgoCD Application that:
+- Monitors the `k8s/rollouts` directory in this repository
+- Auto-syncs changes to the `nginx-demo` namespace
+- Deploys the Nginx application with Argo Rollouts
 
-Wait until all the ArgoCD applications' `HEALTH STATUS` is `Healthy`.
-Use `Ctrl+C` or `Cmd+C` to exit the `watch` command. ArgoCD Applications
-can take a couple of minutes in order to achieve the Healthy status.
+### Step 6: Verify Deployment
 
-```shell
-watch kubectl get -n argocd applications workloads
+Check ArgoCD application status:
+
+```bash
+kubectl get applications -n argocd
 ```
 
-The expected output should look like the following:
+Check the rollout status:
 
-```text
-NAME        SYNC STATUS   HEALTH STATUS
-workloads   Synced        Healthy
+```bash
+kubectl get rollout -n nginx-demo
+kubectl argo rollouts get rollout nginx-demo -n nginx-demo
 ```
 
-### Verify the Application
+Get the application ingress URL:
 
-Verify that the application configuration is present and the pod is running:
-
-```shell
-kubectl get -n game-2048 deployments,service,ep,ingress
+```bash
+kubectl get ingress -n nginx-demo
 ```
 
-The expected output should look like the following:
+## Demonstrating Blue/Green Deployment
 
-```text
-NAME                        READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/game-2048   1/1     1            1           7h59m
+### Quick Demo Steps
 
-NAME                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
-service/game-2048   ClusterIP   172.20.155.47   <none>        80/TCP    7h59m
+1. **Check Current Status**:
+   ```bash
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   ```
 
-NAME                  ENDPOINTS       AGE
-endpoints/game-2048   10.0.13.64:80   7h59m
+2. **Trigger a New Deployment**:
+   - Make a change to `nginx-app/html/index.html` and push to `main`
+   - GitHub Actions will build a new image and update the manifest
+   - ArgoCD will automatically sync the changes
 
-NAME                CLASS   HOSTS   ADDRESS                              PORTS   AGE
-ingress/game-2048   alb     *       k8s-<>.us-west-2.elb.amazonaws.com   80      7h59m
-```
+3. **View Blue/Green State**:
+   ```bash
+   # See both blue (active) and green (preview) revisions
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   
+   # Get preview service URL
+   kubectl get ingress nginx-demo-preview -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+   
+   # Get production service URL
+   kubectl get ingress nginx-demo -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+   ```
 
-AWS Load Balancer can take a couple of minutes in order to be created.
+4. **Test Preview Environment**:
+   - Visit the preview ingress URL to see the green version
+   - Verify it's working correctly
 
-Run the following command and wait until and event for ingress `game-2048` contains `Successfully reconciled`.
-Use `Ctrl+C` or `Cmd+C`to exit the `watch` command.
+5. **Promote Green to Production**:
+   ```bash
+   kubectl argo rollouts promote nginx-demo -n nginx-demo
+   ```
 
-```shell
-kubectl events -n game-2048 --for ingress/game-2048 --watch
-```
+6. **Verify Promotion**:
+   - Visit the production ingress URL
+   - You should see the new version (previously green, now active)
+   - The old blue version will be scaled down after 30 seconds
 
-The expected output should look like the following:
+### Simplifying the Demo
 
-```text
-LAST SEEN   TYPE     REASON                   OBJECT              MESSAGE
-11m         Normal   SuccessfullyReconciled   Ingress/game-2048   Successfully reconciled
-```
+For a simpler demo without health analysis:
+- Comment out `prePromotionAnalysis` and `postPromotionAnalysis` in the Rollout spec
+- The AnalysisTemplates are optional and can be skipped for basic demonstrations
 
-### Access the Application using AWS Load Balancer
+## Architecture
 
-Verify the application endpoint health using `wget`:
+![GitOpsPipeline](static/GitOpsPIpeline.png "GitOps Pipeline")
 
-```shell
-kubectl exec -n game-2048 deploy/game-2048 -- \
-wget -S --spider $(kubectl get -n game-2048 ingress game-2048 -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-```
+### Architecture Flow
 
-The expected output should look like the following:
+1. **Code Push**: Developer pushes code changes to the `nginx-app/` directory in GitHub
+2. **CI Trigger**: GitHub Actions workflow automatically triggers on push to `main` branch
+3. **Build & Push**: Workflow builds Docker image and pushes to Amazon ECR with SHA-based tags
+4. **GitOps Update**: Workflow updates the Helm values file (`helm-charts/nginx-demo/values.yaml`) with the new image tag and commits back to Git
+5. **ArgoCD Sync**: ArgoCD detects the Git change and automatically syncs the updated manifest to the cluster
+6. **Blue/Green Deployment**: Argo Rollouts creates a new "Green" revision alongside the existing "Blue" revision
+7. **Preview Testing**: Green revision is available via preview service/ingress for testing
+8. **Manual Promotion**: After validation, the Green revision is manually promoted to Active (Blue service switches traffic)
+9. **Auto Rollback**: If deployment fails within 10 minutes (`progressDeadlineSeconds: 600`), Argo Rollouts automatically rolls back to the previous revision
+10. **Traffic Routing**: AWS Application Load Balancer routes production traffic to the Active service
 
-```text
-  HTTP/1.1 200 OK
-  Date: Wed, 01 Nov 2023 22:44:57 GMT
-  Content-Type: text/html
-  Content-Length: 3988
-```
+## TODO
+- [x] Change EKS cluster name (changed to `app-cluster-us-west-2`)
+- [x] Rollback on fail (configured with `progressDeadlineSeconds: 300`)
 
->A success response should contain `HTTP/1.1 200 OK`.
+## Test Scenarios
 
-Retrieve the ingress URL to access the application in your local web browser.
+### Scenario 1: End-to-End CI/CD Pipeline Validation
 
-```shell
-echo "Application URL: http://$(kubectl get -n game-2048 ingress game-2048 -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
-```
+**Objective:** Verify complete CI/CD pipeline from code push to deployment.
 
-### Container Metrics
+**Steps:**
 
-Check the application's CPU and memory metrics:
+1. **Trigger Pipeline:**
+   ```bash
+   # Make a change and push
+   echo "<!-- Test $(date) -->" >> nginx-app/html/index.html
+   git add nginx-app/html/index.html && git commit -m "test: CI/CD validation" && git push origin main
+   ```
 
-```shell
-kubectl top pods -n game-2048
-```
+2. **Validate Pipeline Stages:**
+   ```bash
+   # 1. GitHub Actions workflow
+   gh run list --workflow=build-and-deploy.yml --limit 1
+   # Or check: https://github.com/horaceheaven/argo-rollouts-app/actions
+   
+   # 2. ECR image exists
+   COMMIT=$(git rev-parse HEAD)
+   aws ecr describe-images --repository-name nginx-demo-app --image-ids imageTag=$COMMIT --region us-west-2
+   
+   # 3. Helm values updated
+   git pull && yq eval '.app.image.tag' helm-charts/nginx-demo/values.yaml
+   # Should match $COMMIT
+   
+   # 4. ArgoCD synced
+   kubectl get application nginx-gitops-demo -n argocd
+   kubectl get application nginx-gitops-demo -n argocd -o jsonpath='{.status.sync.status}' # Should be "Synced"
+   
+   # 5. New preview revision created
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   kubectl get pods -n nginx-demo -l app.kubernetes.io/name=nginx-demo
+   
+   # 6. Preview accessible
+   PREVIEW_URL=$(kubectl get ingress nginx-demo-preview -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PREVIEW_URL | grep -q "Version" && echo "✅ Preview accessible"
+   ```
 
-The expected output should look like the following:
+**Expected:** GitHub Actions → ECR push → values.yaml update → ArgoCD sync → Preview deployment (production unchanged)
 
-```text
-NAME                         CPU(cores)   MEMORY(bytes)
-game-2048-66fb78b995-h1bjv   1m           2Mi
-```
+---
 
-Check the CPU and memory metrics for all pods for Addons and Workloads:
+### Scenario 2: Deployment Failure and Automatic Rollback
 
-```shell
-kubectl top pods -A
-```
+**Objective:** Verify automatic rollback on deployment failure.
 
-The expected output should look like the following:
+**Steps:**
 
-```text
-NAMESPACE     NAME                                                        CPU(cores)   MEMORY(bytes)
-argocd        argo-cd-argocd-application-controller-0                     43m          138Mi
-argocd        argo-cd-argocd-applicationset-controller-5db688844c-79skp   1m           25Mi
-argocd        argo-cd-argocd-dex-server-cd48d7bc-x7flf                    1m           16Mi
-argocd        argo-cd-argocd-notifications-controller-7d7ccc6b9d-dg9r6    1m           17Mi
-argocd        argo-cd-argocd-redis-7f89c69877-6m2cj                       2m           3Mi
-argocd        argo-cd-argocd-repo-server-644b9b5668-m9ddg                 8m           62Mi
-argocd        argo-cd-argocd-server-57cbbd6f94-lp4wx                      2m           26Mi
-game-2048     game-2048-66fb78b995-h1bjv                                  1m           2Mi
-kube-system   aws-load-balancer-controller-8488df87c-4nxv6                2m           26Mi
-kube-system   aws-load-balancer-controller-8488df87c-zs4p6                1m           19Mi
-kube-system   aws-node-ck6vq                                              3m           57Mi
-kube-system   aws-node-fv2sg                                              3m           56Mi
-kube-system   coredns-59754897cf-5r2xp                                    1m           13Mi
-kube-system   coredns-59754897cf-fn7jb                                    1m           13Mi
-kube-system   kube-proxy-lz2dc                                            1m           11Mi
-kube-system   kube-proxy-pd2lm                                            1m           12Mi
-kube-system   metrics-server-5b76987ff-5g1sv                              4m           17Mi
-```
+1. **Deploy Broken Image:**
+   ```bash
+   # Option 1: Invalid image tag in values.yaml, then push
+   # Option 2: Direct kubectl argo rollouts (bypasses CI/CD)
+   kubectl argo rollouts set image nginx-demo nginx=invalid-image:tag -n nginx-demo
+   ```
 
-## Destroy the EKS Cluster
+2. **Monitor and Verify Rollback:**
+   ```bash
+   # Watch rollout status
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo -w
+   # Should see: Progressing → Degraded → Healthy (rollback)
+   
+   # Verify rollback completed
+   kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.phase}' # Should be "Healthy"
+   
+   # View rollout history (revisions)
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   # Or view ReplicaSets (shows revision history)
+   kubectl get replicaset -n nginx-demo -l app.kubernetes.io/name=nginx-demo --sort-by=.metadata.creationTimestamp
+   
+   # Verify production still accessible
+   PROD_URL=$(kubectl get ingress nginx-demo -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PROD_URL | grep -q "Version" && echo "✅ Production accessible"
+   ```
 
-To tear down all the resources and the EKS cluster, run the following command:
+**Expected:** Rollout detects failure → Auto-rollback within 600s → Production remains available
 
-```shell
-./destroy.sh
-```
+**Rollback Triggers:**
+- Health probe failures (liveness/readiness)
+- `progressDeadlineSeconds` (600s) exceeded
+- Analysis template failures
 
-## Appendix
+---
 
-## Fork GitOps Repositories
+### Scenario 3: Blue/Green Promotion
 
-To modify the `values.yaml` file for addons or the workload manifest files (.ie yaml), you'll need to fork two repositories: [aws-samples/eks-blueprints-add-ons](https://github.com/aws-samples/eks-blueprints-add-ons) for addons and [github.com/aws-ia/terraform-aws-eks-blueprints](https://github.com/aws-ia/terraform-aws-eks-blueprints) for workloads located in this pattern directory.
+**Objective:** Verify blue/green promotion process.
 
-After forking, update the following environment variables to point to your forks, replacing the default values.
+**Steps:**
 
-```shell
-export TF_VAR_gitops_addons_org=https://github.com/aws-samples
-export TF_VAR_gitops_addons_repo=eks-blueprints-add-ons
-export TF_VAR_gitops_addons_revision=main
+1. **Check State:**
+   ```bash
+   kubectl argo rollouts get rollout nginx-demo -n nginx-demo
+   ACTIVE=$(kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.blueGreen.activeSelector}')
+   PREVIEW=$(kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.blueGreen.previewSelector}')
+   ```
 
-export TF_VAR_gitops_workload_org=https://github.com/aws-ia
-export TF_VAR_gitops_workload_repo=terraform-aws-eks-blueprints
-export TF_VAR_gitops_workload_revision=main
-```
+2. **Validate Environments:**
+   ```bash
+   # Preview
+   PREVIEW_URL=$(kubectl get ingress nginx-demo-preview -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PREVIEW_URL
+   
+   # Production
+   PROD_URL=$(kubectl get ingress nginx-demo -n nginx-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+   curl -s http://$PROD_URL
+   ```
+
+3. **Promote and Verify:**
+   ```bash
+   kubectl argo rollouts promote nginx-demo -n nginx-demo
+   
+   # Verify promotion
+   NEW_ACTIVE=$(kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.blueGreen.activeSelector}')
+   [ "$NEW_ACTIVE" = "$PREVIEW" ] && echo "✅ Promotion successful"
+   kubectl get rollout nginx-demo -n nginx-demo -o jsonpath='{.status.phase}' # Should be "Healthy"
+   ```
+
+**Expected:** Preview and production differ → Promotion switches traffic → Zero downtime
+
+## Future Improvements
+- [ ] Add terraform to github actions pipeline for bootstrap and setup

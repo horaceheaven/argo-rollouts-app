@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nginx Demo - ECR Version</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+        }
+        .container {
+            text-align: center;
+            color: white;
+            padding: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        h1 {
+            font-size: 72px;
+            margin: 20px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .version {
+            font-size: 36px;
+            margin: 20px 0;
+            padding: 20px 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        .info {
+            font-size: 18px;
+            margin-top: 30px;
+            opacity: 0.9;
+        }
+        .badge {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #4299e1;
+            border-radius: 20px;
+            margin: 10px;
+            font-weight: bold;
+        }
+        .tech-stack {
+            margin-top: 40px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐳 ECR Demo App</h1>
+        <div class="version">Version 3.2.0</div>
+        <div class="info">
+            <div class="badge">Built with GitHub Actions</div>
+            <div class="badge">Stored in AWS ECR</div>
+            <div class="badge">Deployed by ArgoCD</div>
+            <div class="badge" style="background: #48bb78;">Blue/Green Deployment</div>
+            <div class="badge" style="background: #ed8936;">Version 3.0 Features</div>
+        </div>
+        <p style="margin-top: 40px; font-size: 20px;">
+            <strong>🚀 Version 3.0 - Enhanced Features!</strong><br>
+            Push to Git → Build → ECR → Deploy!<br>
+            <span style="font-size: 16px; opacity: 0.9;">This is the GREEN (preview) version</span><br>
+            <span style="font-size: 14px; opacity: 0.8; margin-top: 10px; display: block;">✨ New features and improvements in this release</span>
+        </p>
+        <div class="tech-stack">
+            <p><strong>Tech Stack:</strong></p>
+            <p>GitHub Actions | AWS ECR | ArgoCD | Kubernetes | Argo Rollouts</p>
+        </div>
+    </div>
+</body>
+</html>
+
+# Trigger workflow
+# Test fix
+# Trigger workflow
+<!-- Test Mon Nov 17 13:12:38 EST 2025 -->
+

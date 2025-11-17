@@ -1,0 +1,199 @@
+name: Build and Deploy to ECR
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'nginx-app/**'  # Only trigger on application code changes
+      - '.github/workflows/build-and-deploy.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: nginx-demo-app
+  GITOPS_REPO: horaceheaven/argo-rollouts-app
+  GITOPS_PATH: helm-charts/nginx-demo/values.yaml
+
+jobs:
+  build-and-push:
+    name: Build Docker Image and Push to ECR
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # For OIDC
+      contents: read
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-ECR-Build
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Create ECR repository if it doesn't exist
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} || \
+          aws ecr create-repository \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256
+      
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=sha,format=long,prefix=
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./nginx-app
+          file: ./nginx-app/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+      
+      - name: Image digest
+        run: echo "Image pushed with digest ${{ steps.build.outputs.digest }}"
+      
+      - name: Scan image for vulnerabilities
+        run: |
+          aws ecr start-image-scan \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-id imageTag=latest \
+            --region ${{ env.AWS_REGION }} || true
+
+  update-gitops:
+    name: Update GitOps Repository
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # For OIDC
+      contents: write
+    
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}  # Personal Access Token with repo scope
+          path: gitops-repo
+      
+      - name: Set up yq
+        uses: mikefarah/yq@master
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-ECR-GitOps
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Get ECR registry URL
+        id: ecr-info
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          echo "registry=${ECR_REGISTRY}" >> $GITHUB_OUTPUT
+      
+      - name: Update image in Helm values
+        run: |
+          cd gitops-repo
+          IMAGE_TAG="${{ steps.ecr-info.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          IMAGE_REPO="${{ steps.ecr-info.outputs.registry }}/${{ env.ECR_REPOSITORY }}"
+          IMAGE_SHA="${{ github.sha }}"
+          
+          echo "📦 Updating Helm values.yaml"
+          echo "  Image: $IMAGE_TAG"
+          echo "  Repository: $IMAGE_REPO"
+          echo "  Tag: $IMAGE_SHA"
+          
+          # Update image repository and tag in values.yaml
+          yq eval ".app.image.repository = \"$IMAGE_REPO\"" -i "${{ env.GITOPS_PATH }}"
+          yq eval ".app.image.tag = \"$IMAGE_SHA\"" -i "${{ env.GITOPS_PATH }}"
+          
+          # Verify the update
+          UPDATED_REPO=$(yq eval '.app.image.repository' "${{ env.GITOPS_PATH }}")
+          UPDATED_TAG=$(yq eval '.app.image.tag' "${{ env.GITOPS_PATH }}")
+          
+          if [ "$UPDATED_REPO" != "$IMAGE_REPO" ] || [ "$UPDATED_TAG" != "$IMAGE_SHA" ]; then
+            echo "❌ ERROR: Failed to update Helm values!"
+            echo "Expected repo: $IMAGE_REPO"
+            echo "Got repo: $UPDATED_REPO"
+            echo "Expected tag: $IMAGE_SHA"
+            echo "Got tag: $UPDATED_TAG"
+            exit 1
+          fi
+          
+          # Verify YAML is still valid
+          if ! yq eval '.' "${{ env.GITOPS_PATH }}" > /dev/null 2>&1; then
+            echo "❌ ERROR: YAML validation failed after update!"
+            exit 1
+          fi
+          
+          echo "✅ Successfully updated Helm values.yaml"
+          echo "   Repository: $UPDATED_REPO"
+          echo "   Tag: $UPDATED_TAG"
+      
+      - name: Commit and push changes
+        run: |
+          cd gitops-repo
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          git add ${{ env.GITOPS_PATH }}
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update nginx-demo image to ${{ github.sha }}
+            
+            Built from: ${{ github.repository }}@${{ github.sha }}
+            Workflow: ${{ github.workflow }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            
+            git push origin main
+            echo "Changes pushed to GitOps repository"
+          fi
+      
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ steps.ecr-info.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**GitOps Repo:** [${{ env.GITOPS_REPO }}](https://github.com/${{ env.GITOPS_REPO }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Manifest:** \`${{ env.GITOPS_PATH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ArgoCD will detect and deploy this change within 3 minutes." >> $GITHUB_STEP_SUMMARY
+
+
+          

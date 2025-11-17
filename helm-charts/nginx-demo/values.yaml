@@ -1,0 +1,101 @@
+# Default values for nginx-demo
+# This is a YAML-formatted file.
+
+namespace:
+  name: nginx-demo
+  create: true
+# Application configuration
+app:
+  name: nginx-demo
+  image:
+    repository: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app
+    tag: "551d9da7269d5a2e900ff93e37ec32e644900d61" # Will be set by GitHub Actions workflow
+    pullPolicy: IfNotPresent
+# ConfigMap selection
+# IMPORTANT: ConfigMap is baked into pod template when ReplicaSet is created
+# - Set to 'green' for new preview revisions (shows preview content)
+# - After promotion, update this to 'blue' and deploy again to switch production to blue
+# - Or manually copy green ConfigMap content to blue ConfigMap after promotion
+configMap:
+  name: green # Options: 'blue' or 'green' - affects which ConfigMap NEW revisions use
+# Blue/Green deployment configuration
+blueGreen:
+  activeService: nginx-demo
+  previewService: nginx-demo-preview
+  autoPromotionEnabled: false
+  autoPromotionSeconds: 30
+  scaleDownDelaySeconds: 30
+# Rollout configuration
+rollout:
+  replicas: 1
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600 # 10 minutes
+# Resource limits
+resources:
+  limits:
+    cpu: 50m
+    memory: 64Mi
+  requests:
+    cpu: 25m
+    memory: 32Mi
+# Health checks
+healthChecks:
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+# Analysis templates
+analysis:
+  prePromotion:
+    enabled: true
+    templateName: nginx-simple-health-check
+  postPromotion:
+    enabled: true
+    templateName: nginx-post-promotion-check
+# Ingress configuration
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/success-codes: "200"
+  preview:
+    enabled: true
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/healthcheck-path: /
+      alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+      alb.ingress.kubernetes.io/success-codes: "200"
+# ConfigMap HTML content
+html:
+  blue:
+    title: "Production - Nginx Demo"
+    version: "3.1"
+    environment: "PRODUCTION ENVIRONMENT"
+    color: "#667eea"
+    badges:
+      - "Production Ready"
+      - "Stable"
+      - "Active"
+  green:
+    title: "Preview - Nginx Demo"
+    version: "3.2"
+    environment: "PREVIEW ENVIRONMENT"
+    color: "#11998e"
+    badges:
+      - "New Features"
+      - "Enhanced"
+      - "Preview Mode"
+      - "Awaiting Promotion"

@@ -39,7 +39,7 @@ provider "kubernetes" {
 }
 
 locals {
-  name   = "getting-started-gitops"
+  name   = "app-cluster-us-west-2"
   region = var.region
 
   cluster_version = var.kubernetes_version
@@ -200,7 +200,7 @@ module "eks" {
 
   eks_managed_node_groups = {
     initial = {
-      instance_types = ["m5.large"]
+      instance_types = ["t3.micro"]
 
       min_size     = 1
       max_size     = 3
