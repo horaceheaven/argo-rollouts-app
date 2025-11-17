@@ -79,7 +79,7 @@ ingress:
 html:
   blue:
     title: "Production - Nginx Demo"
-    version: "2.1"
+    version: "2.2"
     environment: "PRODUCTION ENVIRONMENT"
     color: "#667eea"
     badges:
