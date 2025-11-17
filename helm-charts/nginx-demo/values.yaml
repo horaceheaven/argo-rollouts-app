@@ -9,7 +9,7 @@ app:
   name: nginx-demo
   image:
     repository: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app
-    tag: "fd0e5109ba2bad90bd7c2a71fe90986b982ae079" # Will be set by GitHub Actions workflow
+    tag: "7693a6be1400888a4789f0698c91c17d99f1068c" # Will be set by GitHub Actions workflow
     pullPolicy: IfNotPresent
 # ConfigMap selection
 # Use 'blue' for production, 'green' for preview
