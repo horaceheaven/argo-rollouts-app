@@ -4,20 +4,17 @@
 namespace:
   name: nginx-demo
   create: true
-
 # Application configuration
 app:
   name: nginx-demo
   image:
     repository: 416716292256.dkr.ecr.us-west-2.amazonaws.com/nginx-demo-app
-    tag: "{{GIT_HASH}}"  # Will be set by GitHub Actions workflow
+    tag: "7d717e195c6113aa4f743258ce500dcfbac71b02" # Will be set by GitHub Actions workflow
     pullPolicy: IfNotPresent
-
 # ConfigMap selection
 # Use 'blue' for production, 'green' for preview
 configMap:
-  name: blue  # Options: 'blue' or 'green'
-
+  name: blue # Options: 'blue' or 'green'
 # Blue/Green deployment configuration
 blueGreen:
   activeService: nginx-demo
@@ -25,13 +22,11 @@ blueGreen:
   autoPromotionEnabled: false
   autoPromotionSeconds: 30
   scaleDownDelaySeconds: 30
-
 # Rollout configuration
 rollout:
   replicas: 1
   revisionHistoryLimit: 3
-  progressDeadlineSeconds: 600  # 10 minutes
-
+  progressDeadlineSeconds: 600 # 10 minutes
 # Resource limits
 resources:
   limits:
@@ -40,7 +35,6 @@ resources:
   requests:
     cpu: 25m
     memory: 32Mi
-
 # Health checks
 healthChecks:
   livenessProbe:
@@ -55,7 +49,6 @@ healthChecks:
     periodSeconds: 5
     timeoutSeconds: 3
     failureThreshold: 3
-
 # Analysis templates
 analysis:
   prePromotion:
@@ -64,7 +57,6 @@ analysis:
   postPromotion:
     enabled: true
     templateName: nginx-post-promotion-check
-
 # Ingress configuration
 ingress:
   enabled: true
@@ -83,7 +75,6 @@ ingress:
       alb.ingress.kubernetes.io/healthcheck-path: /
       alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
       alb.ingress.kubernetes.io/success-codes: "200"
-
 # ConfigMap HTML content
 html:
   blue:
@@ -105,4 +96,3 @@ html:
       - "Enhanced"
       - "Preview Mode"
       - "Awaiting Promotion"
-
