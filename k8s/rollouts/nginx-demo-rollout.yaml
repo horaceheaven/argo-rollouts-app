@@ -29,7 +29,7 @@ data:
     \   border-radius: 20px;\n            margin: 10px;\n            font-weight:\
     \ bold;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\"\
     >\n        <div class=\"status-banner\">\U0001F535 PRODUCTION ENVIRONMENT</div>\n\
-    \        <h1>BLUE VERSION</h1>\n        <div class=\"version\">Version 1.0</div>\n\
+    \        <h1>BLUE VERSION</h1>\n        <div class=\"version\">Version 2.0</div>\n\
     \        <div class=\"info\">\n            <div class=\"badge\">Production Ready</div>\n\
     \            <div class=\"badge\">Stable</div>\n            <div class=\"badge\"\
     >Active</div>\n        </div>\n        <p style=\"margin-top: 40px; font-size:\
