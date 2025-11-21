@@ -93,7 +93,7 @@ html:
     title: "Preview - Nginx Demo"
     version: "3.3"
     environment: "PREVIEW ENVIRONMENT"
-    color: "#11998e"
+    color: "#667eea"
     badges:
       - "New Features"
       - "Enhanced"
